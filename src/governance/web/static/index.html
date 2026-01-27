@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-First Governance Console (Reference)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 500;
+        }
+        
+        .header .subtitle {
+            font-size: 0.875rem;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+        }
+        
+        .nav {
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 0 2rem;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            list-style: none;
+        }
+        
+        .nav-tabs li {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .nav-tabs li:hover {
+            background: #f5f5f5;
+        }
+        
+        .nav-tabs li.active {
+            border-bottom-color: #3498db;
+            color: #3498db;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .card h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: #2c3e50;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .table th,
+        .table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .table th {
+            font-weight: 600;
+            color: #666;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .badge-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .badge-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        
+        .proposal-card {
+            border-left: 4px solid #3498db;
+            margin-bottom: 1rem;
+        }
+        
+        .proposal-card.freeze {
+            border-left-color: #e74c3c;
+        }
+        
+        .proposal-card.approved {
+            border-left-color: #27ae60;
+        }
+        
+        .proposal-card.rejected {
+            border-left-color: #95a5a6;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AI-First Governance Console</h1>
+        <div class="subtitle">Reference Implementation - All logic lives in API</div>
+    </div>
+    
+    <nav class="nav">
+        <ul class="nav-tabs">
+            <li class="active" data-tab="observatory">V1: Observatory</li>
+            <li data-tab="decision-room">V2: Decision Room</li>
+            <li data-tab="ecosystem">V3: Ecosystem Ops</li>
+        </ul>
+    </nav>
+    
+    <div class="container">
+        <!-- V1: Observatory -->
+        <div id="observatory" class="tab-content active">
+            <div class="card">
+                <h2>Capability Health Map</h2>
+                <div id="health-map">
+                    <div class="loading">Loading capabilities...</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Risk Level Distribution</h2>
+                <div id="risk-distribution">
+                    <div class="loading">Loading risk distribution...</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Signal Timeline</h2>
+                <div id="signal-timeline">
+                    <div class="loading">Loading signals...</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Capability Demand Radar</h2>
+                <div id="demand-radar">
+                    <div class="loading">Loading demand data...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- V2: Decision Room -->
+        <div id="decision-room" class="tab-content">
+            <div class="card">
+                <h2>Proposal Queue</h2>
+                <div id="proposal-queue">
+                    <div class="loading">Loading proposals...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- V3: Ecosystem Ops -->
+        <div id="ecosystem" class="tab-content">
+            <div class="card">
+                <h2>Capability Adoption</h2>
+                <div id="adoption">
+                    <div class="loading">Loading adoption metrics...</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Lifecycle Funnel</h2>
+                <div id="lifecycle-funnel">
+                    <div class="loading">Loading lifecycle data...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

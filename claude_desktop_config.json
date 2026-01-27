@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ai-first-runtime": {
+      "command": "python3",
+      "args": [
+        "/home/ubuntu/ai-first-runtime/src/runtime/mcp/server_v2.py"
+      ],
+      "env": {}
+    }
+  }
+}

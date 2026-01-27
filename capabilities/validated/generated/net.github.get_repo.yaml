@@ -1,0 +1,46 @@
+id: net.github.get_repo
+name: Get Repository Info Github
+description: 'Capability to get repository info on github. Note: specific_api_endpoint,
+  authentication_method_details, response_data_format may need to be configured.'
+operation_type: NETWORK
+risk:
+  level: LOW
+  justification: Read-only operation with no side effects
+  requires_approval: false
+side_effects:
+  reversible: true
+  scope: network
+  description: 'Side effects: network_read'
+compensation:
+  supported: true
+  strategy: automatic
+  capability_id: null
+parameters:
+- name: owner
+  type: string
+  description: Owner parameter
+  required: true
+  default: null
+- name: repo
+  type: string
+  description: Repo parameter
+  required: true
+  default: null
+returns:
+  type: object
+  properties:
+    repository_info:
+      type: string
+      description: Repository Info value
+    metadata:
+      type: string
+      description: Metadata value
+metadata:
+  version: 1.0.0
+  author: AutoForge
+  tags:
+  - github
+  - network
+  - network
+  deprecated: false
+handler: runtime.stdlib.generated.net_github_get_repo

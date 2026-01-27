@@ -1,0 +1,68 @@
+# 这是 AutoForge 会生成的 GitHub API 能力规范示例
+# 实际运行需要 OPENAI_API_KEY 和依赖安装
+
+id: net.github.get_repo
+name: Get Repository GitHub
+description: 从 GitHub API 获取仓库信息，需要 OAuth token 认证
+operation_type: NETWORK
+risk:
+  level: LOW
+  justification: 只读操作，无副作用
+  requires_approval: false
+side_effects:
+  reversible: true
+  scope: network
+  description: 网络读取操作
+compensation:
+  supported: false
+  strategy: null
+  capability_id: null
+parameters:
+  - name: owner
+    type: string
+    description: 仓库所有者（用户名或组织名）
+    required: true
+    default: null
+  - name: repo
+    type: string
+    description: 仓库名称
+    required: true
+    default: null
+  - name: token
+    type: string
+    description: GitHub OAuth token
+    required: true
+    default: null
+returns:
+  type: object
+  properties:
+    id:
+      type: number
+      description: 仓库 ID
+    name:
+      type: string
+      description: 仓库名称
+    full_name:
+      type: string
+      description: 完整仓库名称
+    description:
+      type: string
+      description: 仓库描述
+    stargazers_count:
+      type: number
+      description: 星标数
+    forks_count:
+      type: number
+      description: Fork 数
+    open_issues_count:
+      type: number
+      description: 开放 Issue 数
+metadata:
+  version: "1.0.0"
+  author: AutoForge
+  tags:
+    - github
+    - network
+    - api
+  deprecated: false
+handler: runtime.stdlib.generated.net_github_get_repo

@@ -1,0 +1,111 @@
+# AI-First Runtime - Policy Configuration Example
+#
+# This file defines access control rules for workflows and capabilities.
+#
+# Philosophy: Fail-closed (deny by default)
+# Principle #8: Policy is Declarative, Not Imperative
+# Principle #9: The Gatekeeper, Not the Commander
+
+# Default decision when no rule matches
+default: DENY
+
+rules:
+  # ============================================================================
+  # Low-Risk Operations: ALLOW
+  # ============================================================================
+  
+  # Allow data processing agents to read files
+  - principal: "agent:data_processor"
+    capabilities: ["io.fs.read_file", "io.fs.list_directory"]
+    action: ALLOW
+  
+  # Allow orchestrator to execute workflows
+  - principal: "agent:orchestrator"
+    capabilities: ["workflow.*"]
+    action: ALLOW
+  
+  # Allow monitoring agents to read system info
+  - principal: "agent:monitor"
+    capabilities: ["sys.get_env", "sys.run_command"]
+    action: ALLOW
+  
+  # ============================================================================
+  # Medium-Risk Operations: ALLOW (with logging)
+  # ============================================================================
+  
+  # Allow data processing agents to write files
+  - principal: "agent:data_processor"
+    capabilities: ["io.fs.write_file", "io.fs.create_directory"]
+    action: ALLOW
+  
+  # Allow network agents to make HTTP requests
+  - principal: "agent:api_client"
+    capabilities: ["net.http.get", "net.http.post"]
+    action: ALLOW
+  
+  # ============================================================================
+  # High-Risk Operations: REQUIRE_APPROVAL
+  # ============================================================================
+  
+  # Require approval for database deletions
+  - principal: "agent:*"
+    capabilities: ["db.delete_table", "db.drop_database"]
+    action: REQUIRE_APPROVAL
+  
+  # Require approval for file deletions
+  - principal: "agent:*"
+    capabilities: ["io.fs.delete_file", "io.fs.delete_directory"]
+    action: REQUIRE_APPROVAL
+  
+  # Require approval for cloud resource creation
+  - principal: "agent:*"
+    capabilities: ["cloud.vm.create", "cloud.db.create"]
+    action: REQUIRE_APPROVAL
+  
+  # Require approval for production deployments
+  - principal: "agent:*"
+    capabilities: ["deploy.production.*"]
+    action: REQUIRE_APPROVAL
+  
+  # ============================================================================
+  # Critical Operations: DENY
+  # ============================================================================
+  
+  # Deny all agents from accessing payment APIs
+  - principal: "agent:*"
+    capabilities: ["api.payment.*", "api.billing.*"]
+    action: DENY
+  
+  # Deny all agents from accessing authentication APIs
+  - principal: "agent:*"
+    capabilities: ["api.auth.*", "api.user.*"]
+    action: DENY
+  
+  # Deny all agents from modifying policies
+  - principal: "agent:*"
+    capabilities: ["policy.*"]
+    action: DENY
+  
+  # ============================================================================
+  # Human Users: ALLOW (with approval for high-risk)
+  # ============================================================================
+  
+  # Allow human users to do anything (will be escalated to REQUIRE_APPROVAL for HIGH risk)
+  - principal: "user:*"
+    capabilities: ["*"]
+    action: ALLOW
+
+# ============================================================================
+# Risk-Based Escalation (Automatic)
+# ============================================================================
+#
+# The PolicyEngine automatically escalates ALLOW decisions to REQUIRE_APPROVAL
+# for operations with HIGH or CRITICAL risk levels.
+#
+# This means:
+# - user:alice tries to delete a file (HIGH risk)
+# - Rule matches: "user:*" -> "*" = ALLOW
+# - PolicyEngine escalates to REQUIRE_APPROVAL due to HIGH risk
+# - Workflow pauses and sends approval request
+#
+# This implements Principle #4: Human-in-the-Loop is Mandatory for High-Risk Operations

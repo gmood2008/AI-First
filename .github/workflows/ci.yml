@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-cov pylint
+    
+    - name: Lint with pylint
+      run: |
+        pylint src/runtime/engine.py src/runtime/undo/manager.py src/runtime/audit/logger.py --disable=C,R,W --errors-only
+      continue-on-error: true
+    
+    - name: Run tests
+      run: |
+        pytest test_*.py -v --cov=src --cov-report=xml --cov-report=term
+      continue-on-error: true
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+      continue-on-error: true
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run security scan
+      run: |
+        # Check for hardcoded secrets
+        ! grep -r -E "(xoxb-|sk-|ghp_|gho_|AIza|AKIA)" --include="*.py" src/ tools/ || exit 1
+        echo "✅ No hardcoded secrets found"

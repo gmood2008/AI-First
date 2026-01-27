@@ -1,0 +1,147 @@
+name: customer_onboarding
+version: 1.0.0
+description: Onboard a new customer with account creation, welcome email, and audit trail
+
+metadata:
+  owner: daniel.hhd@gmail.com
+  business_unit: Sales
+  cost_center: SALES-001
+  compliance_tags:
+    - SOC2
+    - GDPR
+  environment: prod
+  audit_level: FULL
+  retention_days: 365
+
+initial_state:
+  customer_name: "Acme Corp"
+  customer_email: "contact@acme.com"
+  customer_tier: "enterprise"
+
+steps:
+  - name: create_account
+    step_type: ACTION
+    agent_name: account_manager
+    capability_name: crm.create_account
+    inputs:
+      customer_name: "{{customer_name}}"
+      tier: "{{customer_tier}}"
+    risk_level: HIGH
+    compensation:
+      step_name: create_account
+      capability_name: crm.delete_account
+      inputs:
+        account_id: "{{account_id}}"
+      description: "Delete the account if workflow fails"
+    description: "Create a new CRM account for the customer"
+
+  - name: provision_resources
+    step_type: ACTION
+    agent_name: infrastructure_agent
+    capability_name: cloud.provision_tenant
+    inputs:
+      account_id: "{{account_id}}"
+      tier: "{{customer_tier}}"
+    depends_on:
+      - create_account
+    risk_level: HIGH
+    compensation:
+      step_name: provision_resources
+      capability_name: cloud.deprovision_tenant
+      inputs:
+        tenant_id: "{{tenant_id}}"
+      description: "Deprovision cloud resources if workflow fails"
+    description: "Provision cloud infrastructure for the customer"
+
+  - name: human_approval
+    step_type: HUMAN_APPROVAL
+    agent_name: compliance_officer
+    capability_name: human.approve
+    inputs:
+      approval_message: "New enterprise customer {{customer_name}} requires approval"
+      approver_role: "sales_director"
+      approval_timeout: 1800
+    depends_on:
+      - create_account
+      - provision_resources
+    risk_level: MEDIUM
+    description: "Sales director must approve enterprise onboarding"
+
+  - name: send_welcome_email
+    step_type: ACTION
+    agent_name: email_agent
+    capability_name: email.send
+    inputs:
+      to: "{{customer_email}}"
+      template: "enterprise_welcome"
+      variables:
+        account_id: "{{account_id}}"
+        tenant_id: "{{tenant_id}}"
+    depends_on:
+      - human_approval
+    risk_level: LOW
+    description: "Send welcome email with account details"
+
+  - name: create_audit_record
+    step_type: ACTION
+    agent_name: audit_agent
+    capability_name: audit.create_record
+    inputs:
+      event_type: "customer_onboarded"
+      customer_name: "{{customer_name}}"
+      account_id: "{{account_id}}"
+      approved_by: "{{approver_email}}"
+    depends_on:
+      - send_welcome_email
+    risk_level: LOW
+    description: "Create audit trail for compliance"
+
+policy:
+  - agent_name: account_manager
+    allowed_capabilities:
+      - crm.create_account
+      - crm.delete_account
+      - crm.update_account
+    requires_approval_for: []
+    allowed_environments:
+      - prod
+      - staging
+    max_retries: 2
+    timeout_seconds: 300
+
+  - agent_name: infrastructure_agent
+    allowed_capabilities:
+      - cloud.provision_tenant
+      - cloud.deprovision_tenant
+    requires_approval_for: []
+    allowed_environments:
+      - prod
+    max_retries: 1
+    timeout_seconds: 600
+
+  - agent_name: email_agent
+    allowed_capabilities:
+      - email.send
+    requires_approval_for: []
+    allowed_environments:
+      - prod
+      - staging
+      - dev
+    max_retries: 3
+    timeout_seconds: 60
+
+  - agent_name: audit_agent
+    allowed_capabilities:
+      - audit.create_record
+    requires_approval_for: []
+    allowed_environments:
+      - prod
+      - staging
+      - dev
+    max_retries: 5
+    timeout_seconds: 30
+
+global_compensation_steps: []
+
+max_execution_time_seconds: 3600
+enable_auto_rollback: true

@@ -1,0 +1,46 @@
+name: Question
+description: Ask a question about AI-First Runtime
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question? We're here to help!
+        
+        Before asking, please check:
+        - [Documentation](https://github.com/gmood2008/ai-first-runtime/tree/master/docs)
+        - [Existing Issues](https://github.com/gmood2008/ai-first-runtime/issues)
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+      placeholder: How do I...?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any additional information that might help us answer your question
+      placeholder: I'm trying to... and I've already tried...
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Topic Area
+      description: Which area does your question relate to?
+      options:
+        - Undo Mechanism
+        - Audit/Compliance
+        - Smart Importer
+        - MCP Integration
+        - Handler Development
+        - Installation/Setup
+        - General Usage
+        - Other
+    validations:
+      required: true

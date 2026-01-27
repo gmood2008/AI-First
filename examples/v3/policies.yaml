@@ -1,0 +1,61 @@
+# AI-First Runtime - Policy Configuration
+# This file defines access control rules for workflows and capabilities.
+
+# Default decision when no rule matches (ALLOW or DENY)
+# Best practice: Use DENY for production (fail-closed security)
+default: DENY
+
+# Policy Rules
+# Rules are evaluated in order. First match wins.
+rules:
+  # Rule 1: Allow data processing agents to read/write files
+  - principal: "agent:data_processor"
+    capabilities:
+      - "io.fs.read_file"
+      - "io.fs.write_file"
+      - "io.fs.create_directory"
+      - "io.fs.delete_file"
+    action: ALLOW
+  
+  # Rule 2: Allow orchestrator to execute workflows and basic operations
+  - principal: "agent:orchestrator"
+    capabilities:
+      - "workflow.*"
+      - "io.fs.*"
+      - "crm.*"
+    action: ALLOW
+  
+  # Rule 3: Require approval for database deletions (any agent)
+  - principal: "agent:*"
+    capabilities:
+      - "db.delete_table"
+      - "db.drop_database"
+      - "db.truncate_table"
+    action: REQUIRE_APPROVAL
+  
+  # Rule 4: Deny all agents from accessing sensitive APIs
+  - principal: "agent:*"
+    capabilities:
+      - "api.payment.*"
+      - "api.auth.*"
+      - "api.admin.*"
+    action: DENY
+  
+  # Rule 5: Allow human users to do anything
+  # (High-risk operations will still require approval due to risk escalation)
+  - principal: "user:*"
+    capabilities:
+      - "*"
+    action: ALLOW
+  
+  # Rule 6: Allow test agents to do anything (for testing)
+  - principal: "agent:test_*"
+    capabilities:
+      - "*"
+    action: ALLOW
+
+# Notes:
+# - Wildcards (*) are supported at the end of patterns
+# - Risk-based escalation: HIGH and CRITICAL risk operations automatically require approval
+# - Principals format: "agent:<name>" or "user:<name>"
+# - Capabilities format: "<namespace>.<action>" (e.g., "io.fs.write_file")

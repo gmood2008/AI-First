@@ -1,0 +1,31 @@
+pack_id: financial-analyst-pack
+name: financial-analyst
+version: 1.0.0
+
+description: >
+  Financial Analyst Skill Suite.
+  Extract tables from PDFs, perform deterministic financial calculations
+  using Pandas, and generate auditable financial reports.
+
+includes:
+  capabilities:
+    - io.pdf.extract_table
+    - math.pandas.calculate
+  workflows:
+    - financial_report
+
+risk_profile:
+  max_risk: HIGH
+  justification: >
+    Financial data processing requires high numerical accuracy and may
+    involve sensitive information. All executions must be reviewed by
+    a human before finalization.
+  requires_human_approval: true
+  auto_rollback_on_failure: true
+
+governance:
+  requires_approval: true
+  approval_roles:
+    - admin
+    - finance_director
+  audit_level: FORENSIC

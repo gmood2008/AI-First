@@ -1,0 +1,81 @@
+workflow_id: financial_report
+name: financial_report
+version: 1.0.0
+
+description: >
+  Extract financial tables from PDF, perform deterministic financial
+  calculations using Pandas, and generate an auditable markdown report.
+
+metadata:
+  owner: financial_analyst
+  business_unit: Finance
+  cost_center: FIN-001
+  compliance_tags:
+    - SOX
+    - GDPR
+  environment: prod
+  pack_id: financial-analyst-pack
+
+initial_state:
+  pdf_path: "/data/financial_reports/q4_2024.pdf"
+  output_path: "/data/financial_reports/analysis_report.md"
+
+steps:
+  - name: extract_tables
+    step_type: ACTION
+    agent_name: financial_analyst
+    capability_name: io.pdf.extract_table
+    inputs:
+      pdf_path: "{{pdf_path}}"
+      page_range: "all"
+      table_detection_mode: "auto"
+    description: "Extract financial tables from PDF document"
+    max_retries: 2
+    timeout_seconds: 300
+
+  - name: calculate_metrics
+    step_type: ACTION
+    agent_name: financial_analyst
+    capability_name: math.pandas.calculate
+    inputs:
+      data: "{{extracted_tables}}"
+      operations:
+        - type: "sum"
+          column: "revenue"
+        - type: "mean"
+          column: "expenses"
+        - type: "calculate"
+          formula: "revenue - expenses"
+          output_column: "profit"
+    depends_on:
+      - extract_tables
+    description: "Calculate financial metrics using Pandas"
+    max_retries: 2
+    timeout_seconds: 600
+
+  - name: render_report
+    step_type: ACTION
+    agent_name: financial_analyst
+    capability_name: io.fs.write_file
+    inputs:
+      file_path: "{{output_path}}"
+      content: |
+        # Financial Analysis Report
+        
+        ## Extracted Data
+        {{extracted_tables}}
+        
+        ## Calculated Metrics
+        {{calculated_metrics}}
+        
+        ## Summary
+        Generated on: {{timestamp}}
+        Source: {{pdf_path}}
+    depends_on:
+      - calculate_metrics
+    description: "Render markdown report"
+    max_retries: 3
+    timeout_seconds: 60
+
+max_execution_time_seconds: 1800
+enable_auto_rollback: true

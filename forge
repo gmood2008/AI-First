@@ -1,0 +1,18 @@
+#!/bin/bash
+# AutoForge CLI 命令包装器
+# 在项目根目录使用: ./forge <command> [args]
+
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# 自动激活虚拟环境（如果存在）
+if [ -d "venv" ]; then
+    source venv/bin/activate
+fi
+
+# 设置 Python 路径
+export PYTHONPATH="$SCRIPT_DIR/src:$SCRIPT_DIR/tools:$PYTHONPATH"
+
+# 运行 forge 命令
+python3 tools/forge/cli.py "$@"
