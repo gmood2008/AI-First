@@ -8,6 +8,7 @@ from typing import Any, Dict
 import httpx
 
 from ..handler import ActionHandler
+from ..types import ActionOutput
 
 
 class HTTPGetHandler(ActionHandler):
@@ -27,28 +28,40 @@ class HTTPGetHandler(ActionHandler):
                 follow_redirects=follow_redirects,
             )
             
-            return {
-                "status_code": response.status_code,
-                "body": response.text,
-                "headers": dict(response.headers),
-                "success": 200 <= response.status_code < 300,
-            }
+            return ActionOutput(
+                result={
+                    "status_code": response.status_code,
+                    "body": response.text,
+                    "headers": dict(response.headers),
+                    "success": 200 <= response.status_code < 300,
+                },
+                undo_closure=None,
+                description=f"net.http.get: {url}",
+            )
         except httpx.TimeoutException:
-            return {
-                "status_code": 0,
-                "body": "",
-                "headers": {},
-                "success": False,
-                "error_message": f"Request timed out after {timeout} seconds",
-            }
+            return ActionOutput(
+                result={
+                    "status_code": 0,
+                    "body": "",
+                    "headers": {},
+                    "success": False,
+                    "error_message": f"Request timed out after {timeout} seconds",
+                },
+                undo_closure=None,
+                description=f"net.http.get: timeout {url}",
+            )
         except Exception as e:
-            return {
-                "status_code": 0,
-                "body": "",
-                "headers": {},
-                "success": False,
-                "error_message": str(e),
-            }
+            return ActionOutput(
+                result={
+                    "status_code": 0,
+                    "body": "",
+                    "headers": {},
+                    "success": False,
+                    "error_message": str(e),
+                },
+                undo_closure=None,
+                description=f"net.http.get: error {url}",
+            )
 
 
 class HTTPPostHandler(ActionHandler):
@@ -72,29 +85,41 @@ class HTTPPostHandler(ActionHandler):
                 headers=headers,
                 timeout=timeout,
             )
-            
-            return {
-                "status_code": response.status_code,
-                "body": response.text,
-                "headers": dict(response.headers),
-                "success": 200 <= response.status_code < 300,
-            }
+
+            return ActionOutput(
+                result={
+                    "status_code": response.status_code,
+                    "body": response.text,
+                    "headers": dict(response.headers),
+                    "success": 200 <= response.status_code < 300,
+                },
+                undo_closure=None,
+                description=f"net.http.post: {url}",
+            )
         except httpx.TimeoutException:
-            return {
-                "status_code": 0,
-                "body": "",
-                "headers": {},
-                "success": False,
-                "error_message": f"Request timed out after {timeout} seconds",
-            }
+            return ActionOutput(
+                result={
+                    "status_code": 0,
+                    "body": "",
+                    "headers": {},
+                    "success": False,
+                    "error_message": f"Request timed out after {timeout} seconds",
+                },
+                undo_closure=None,
+                description=f"net.http.post: timeout {url}",
+            )
         except Exception as e:
-            return {
-                "status_code": 0,
-                "body": "",
-                "headers": {},
-                "success": False,
-                "error_message": str(e),
-            }
+            return ActionOutput(
+                result={
+                    "status_code": 0,
+                    "body": "",
+                    "headers": {},
+                    "success": False,
+                    "error_message": str(e),
+                },
+                undo_closure=None,
+                description=f"net.http.post: error {url}",
+            )
 
 
 class HTTPPutHandler(ActionHandler):
@@ -118,26 +143,38 @@ class HTTPPutHandler(ActionHandler):
                 headers=headers,
                 timeout=timeout,
             )
-            
-            return {
-                "status_code": response.status_code,
-                "body": response.text,
-                "headers": dict(response.headers),
-                "success": 200 <= response.status_code < 300,
-            }
+
+            return ActionOutput(
+                result={
+                    "status_code": response.status_code,
+                    "body": response.text,
+                    "headers": dict(response.headers),
+                    "success": 200 <= response.status_code < 300,
+                },
+                undo_closure=None,
+                description=f"net.http.put: {url}",
+            )
         except httpx.TimeoutException:
-            return {
-                "status_code": 0,
-                "body": "",
-                "headers": {},
-                "success": False,
-                "error_message": f"Request timed out after {timeout} seconds",
-            }
+            return ActionOutput(
+                result={
+                    "status_code": 0,
+                    "body": "",
+                    "headers": {},
+                    "success": False,
+                    "error_message": f"Request timed out after {timeout} seconds",
+                },
+                undo_closure=None,
+                description=f"net.http.put: timeout {url}",
+            )
         except Exception as e:
-            return {
-                "status_code": 0,
-                "body": "",
-                "headers": {},
-                "success": False,
-                "error_message": str(e),
-            }
+            return ActionOutput(
+                result={
+                    "status_code": 0,
+                    "body": "",
+                    "headers": {},
+                    "success": False,
+                    "error_message": str(e),
+                },
+                undo_closure=None,
+                description=f"net.http.put: error {url}",
+            )

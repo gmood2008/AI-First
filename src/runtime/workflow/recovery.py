@@ -10,8 +10,8 @@ import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
 
-from .persistence import WorkflowPersistence, WorkflowStatus, CompensationIntent
-from src.specs.v3.workflow_schema import WorkflowSpec
+from .persistence import WorkflowPersistence, WorkflowStatus as PersistenceWorkflowStatus, CompensationIntent
+from specs.v3.workflow_schema import WorkflowSpec, WorkflowStatus
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,23 @@ class WorkflowRecovery:
 
                 # Reconstruct workflow spec from YAML
                 spec_dict = yaml.safe_load(workflow_record["spec_yaml"])
+                if isinstance(spec_dict, dict):
+                    metadata = spec_dict.get("metadata")
+                    if isinstance(metadata, dict):
+                        raw_status = metadata.get("status")
+                        if raw_status is not None:
+                            # Persisted workflows store lowercase status values (e.g. 'paused'),
+                            # but the v3 WorkflowSpec schema expects uppercase enum values (e.g. 'PAUSED').
+                            metadata["status"] = str(raw_status).upper()
                 spec = WorkflowSpec(**spec_dict)
+
+                # Align spec metadata with persisted workflow status
+                try:
+                    if getattr(spec, "metadata", None) is not None:
+                        spec.metadata.status = WorkflowStatus(str(status).upper())
+                except Exception:
+                    # Keep original spec metadata if status cannot be parsed
+                    pass
 
                 # Reconstruct execution context
                 from .engine import WorkflowExecutionContext
@@ -73,10 +89,17 @@ class WorkflowRecovery:
                 # Restore completed steps
                 steps = self.persistence.get_workflow_steps(workflow_id)
                 for step_record in steps:
-                    if step_record["status"] == "completed":
+                    step_status = step_record.get("status")
+                    step_status_text = str(step_status).lower() if step_status is not None else ""
+                    if "." in step_status_text:
+                        step_status_text = step_status_text.split(".")[-1]
+
+                    # Engine marks a PAUSED step as completed so it won't be re-executed on resume.
+                    if step_status_text in {"completed", "paused"}:
                         context.completed_steps.append(step_record["step_id"])
-                        if step_record["outputs_json"]:
+                        if step_record.get("outputs_json"):
                             import json
+
                             outputs = json.loads(step_record["outputs_json"])
                             context.state.update(outputs)
 
@@ -94,13 +117,13 @@ class WorkflowRecovery:
                 self.engine.workflows[workflow_id] = context
 
                 # Resume execution if RUNNING
-                if status == WorkflowStatus.RUNNING.value:
+                if status == PersistenceWorkflowStatus.RUNNING.value:
                     logger.info(
                         f"Auto-resuming RUNNING workflow {workflow_id}")
                     # Note: Actual resumption happens in the main event loop
                     # For now, we just mark it as ready
                     resumed_count += 1
-                elif status == WorkflowStatus.PAUSED.value:
+                elif status == PersistenceWorkflowStatus.PAUSED.value:
                     logger.info(
                         f"Workflow {workflow_id} is PAUSED (waiting for human approval)")
                     resumed_count += 1
@@ -111,7 +134,7 @@ class WorkflowRecovery:
                 # Mark workflow as FAILED
                 self.persistence.update_workflow_status(
                     workflow_id=workflow_record["id"],
-                    status=WorkflowStatus.FAILED,
+                    status=PersistenceWorkflowStatus.FAILED,
                     error_message=f"Recovery failed: {str(e)}"
                 )
 
@@ -172,6 +195,48 @@ class WorkflowRecovery:
                 raise
 
         return undo_closure
+
+    def rollback_workflow(
+        self,
+        workflow_id: str,
+        reason: str = "Manual rollback",
+    ) -> bool:
+        """
+        Run compensation stack for a workflow and mark it ROLLED_BACK.
+
+        Args:
+            workflow_id: Workflow identifier
+            reason: Reason for rollback (e.g. "Global rollback from dashboard")
+
+        Returns:
+            True if rollback was performed, False if workflow not active or no compensations
+        """
+        running = self.persistence.get_running_workflows()
+        if not any(w.get("id") == workflow_id for w in running):
+            logger.warning("Workflow %s is not RUNNING/PAUSED; skipping rollback", workflow_id)
+            return False
+
+        stack = self.persistence.get_compensation_stack(workflow_id)
+        for intent in stack:
+            try:
+                closure = self._intent_to_closure(intent)
+                closure()
+            except Exception as e:
+                logger.error("Compensation failed for workflow %s: %s", workflow_id, e)
+                self.persistence.update_workflow_status(
+                    workflow_id=workflow_id,
+                    status=WorkflowStatus.ROLLED_BACK,
+                    rollback_reason=f"{reason} (compensation error: {e})",
+                )
+                return True
+
+        self.persistence.update_workflow_status(
+            workflow_id=workflow_id,
+            status=WorkflowStatus.ROLLED_BACK,
+            rollback_reason=reason,
+        )
+        logger.info("Workflow %s rolled back: %s", workflow_id, reason)
+        return True
 
     def checkpoint_step(
         self,

@@ -1,0 +1,83 @@
+workflow_id: aegis_financial_summary_ppt
+name: aegis_financial_summary_ppt
+version: 1.0.0
+
+description: >
+  Demo: summarize a (mock) financial report and generate a PPT-like artifact.
+  This workflow is stdlib-only and writes artifacts inside the workspace.
+
+metadata:
+  owner: aegis_demo
+  business_unit: Aegis
+  cost_center: AEGIS-DEMO
+  compliance_tags:
+    - DEMO
+  environment: dev
+  pack_id: aegis-demo-pack
+
+initial_state:
+  report_path: "demo/report.txt"
+  summary_path: "demo/summary.md"
+  ppt_path: "demo/output.pptx"
+
+steps:
+  - name: write_mock_report
+    step_type: ACTION
+    agent_name: aegis
+    capability_name: io.fs.write_file
+    inputs:
+      path: "{{report_path}}"
+      content: |
+        ACME Corp - Q4 Financial Report (Mock)
+
+        Revenue: 100
+        Expenses: 60
+        Profit: 40
+
+        Notes:
+        - This is demo data stored under workspace/demo
+      create_dirs: true
+    description: "Create a mock financial report inside workspace"
+
+  - name: write_summary
+    step_type: ACTION
+    agent_name: aegis
+    capability_name: io.fs.write_file
+    inputs:
+      path: "{{summary_path}}"
+      content: |
+        # Financial Summary (Demo)
+
+        Source: {{report_path}}
+
+        ## Key numbers
+        - Revenue: 100
+        - Expenses: 60
+        - Profit: 40
+
+        ## Trace
+        - workflow_id: {{workflow_id}}
+      create_dirs: true
+    depends_on:
+      - write_mock_report
+    description: "Write a summary markdown file"
+
+  - name: write_ppt_artifact
+    step_type: ACTION
+    agent_name: aegis
+    capability_name: io.fs.write_file
+    inputs:
+      path: "{{ppt_path}}"
+      content: |
+        PPTX (mock)
+
+        Title: Q4 Financial Summary
+        Summary file: {{summary_path}}
+        Profit: 40
+      create_dirs: true
+    depends_on:
+      - write_summary
+    description: "Write a PPT-like artifact (mock file)"
+
+max_execution_time_seconds: 300
+enable_auto_rollback: true

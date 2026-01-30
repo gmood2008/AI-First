@@ -18,9 +18,19 @@ from textual.screen import Screen
 from textual import events
 from datetime import datetime
 from typing import Optional
+import os
 import sqlite3
 
 from src.specs.v3.workflow_schema import WorkflowStatus
+from src.runtime.workflow.persistence import WorkflowPersistence
+from src.runtime.workflow.recovery import WorkflowRecovery
+
+
+def _audit_db_path() -> str:
+    """Path to audit DB: AI_FIRST_AUDIT_DB env, or ~/.ai-first/audit.db, or cwd audit.db."""
+    return os.environ.get("AI_FIRST_AUDIT_DB") or os.path.join(
+        os.path.expanduser("~"), ".ai-first", "audit.db"
+    )
 
 
 class WorkflowListView(Container):
@@ -44,15 +54,15 @@ class WorkflowListView(Container):
         table = self.query_one("#workflow-table", DataTable)
         table.clear()
         
-        # Query database for active workflows
+        # Query database for active workflows (workflows.id = workflow identifier)
         try:
-            conn = sqlite3.connect("audit.db")
+            conn = sqlite3.connect(_audit_db_path())
             cursor = conn.cursor()
-            
+
             cursor.execute("""
-                SELECT workflow_id, name, status, owner, started_at,
-                       (SELECT COUNT(*) FROM workflow_steps WHERE workflow_steps.workflow_id = workflows.workflow_id AND status = 'COMPLETED') as completed,
-                       (SELECT COUNT(*) FROM workflow_steps WHERE workflow_steps.workflow_id = workflows.workflow_id) as total
+                SELECT id, name, status, owner, started_at,
+                       (SELECT COUNT(*) FROM workflow_steps WHERE workflow_steps.workflow_id = workflows.id AND status = 'COMPLETED') as completed,
+                       (SELECT COUNT(*) FROM workflow_steps WHERE workflow_steps.workflow_id = workflows.id) as total
                 FROM workflows
                 WHERE status IN ('PENDING', 'RUNNING', 'PAUSED')
                 ORDER BY started_at DESC
@@ -128,14 +138,14 @@ class WorkflowDetailView(Container):
         self.workflow_id = workflow_id
         
         try:
-            conn = sqlite3.connect("audit.db")
+            conn = sqlite3.connect(_audit_db_path())
             cursor = conn.cursor()
-            
-            # Get workflow info
+
+            # Get workflow info (workflows.id = workflow identifier)
             cursor.execute("""
                 SELECT name, status, owner, started_at, completed_at, error_message
                 FROM workflows
-                WHERE workflow_id = ?
+                WHERE id = ?
             """, (workflow_id,))
             
             row = cursor.fetchone()
@@ -155,7 +165,7 @@ Error: {error_message or 'None'}
                 
                 # Update progress bar
                 cursor.execute("""
-                    SELECT 
+                    SELECT
                         COUNT(*) as total,
                         SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) as completed
                     FROM workflow_steps
@@ -304,8 +314,23 @@ class DashboardApp(App):
         elif button_id == "reject-btn":
             self.notify("Reject functionality coming soon", severity="warning")
         elif button_id == "rollback-btn":
-            self.notify("⚠️ PANIC BUTTON: Global rollback triggered!", severity="error")
-            # TODO: Implement global rollback
+            try:
+                db_path = _audit_db_path()
+                persistence = WorkflowPersistence(db_path)
+                recovery = WorkflowRecovery(engine=None, persistence=persistence)
+                running = persistence.get_running_workflows()
+                rolled = 0
+                for w in running:
+                    wid = w.get("id")
+                    if wid and recovery.rollback_workflow(wid, reason="Global rollback from dashboard"):
+                        rolled += 1
+                if rolled > 0:
+                    self.notify(f"↩️ Global rollback: {rolled} workflow(s) rolled back.", severity="warning")
+                    self.action_refresh()
+                else:
+                    self.notify("No RUNNING/PAUSED workflows to roll back.", severity="information")
+            except Exception as e:
+                self.notify(f"Rollback failed: {e}", severity="error")
 
 
 def run_dashboard():

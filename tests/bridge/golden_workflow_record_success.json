@@ -1,0 +1,63 @@
+{
+  "id": "<uuid>",
+  "executionId": "exec-001",
+  "traceId": "trace-001",
+  "parentTraceId": null,
+  "questId": "quest-001",
+  "workflowExecutionId": "<workflow-exec-id>",
+  "workflowName": "example_workflow",
+  "status": "success",
+  "error": null,
+  "startTime": "2026-01-30T10:00:00Z",
+  "endTime": "2026-01-30T10:00:05Z",
+  "workflow": {
+    "id": "<workflow-exec-id>",
+    "name": "example_workflow",
+    "owner": "aegis",
+    "status": "completed",
+    "createdAt": "2026-01-30T10:00:00Z",
+    "updatedAt": "2026-01-30T10:00:05Z",
+    "startedAt": "2026-01-30T10:00:00Z",
+    "completedAt": "2026-01-30T10:00:05Z",
+    "errorMessage": null,
+    "rollbackReason": null
+  },
+  "steps": [
+    {
+      "stepId": "fetch_report",
+      "stepName": "fetch_report",
+      "capabilityId": "io.http.get",
+      "agentName": "aegis",
+      "status": "completed",
+      "startedAt": "2026-01-30T10:00:00Z",
+      "completedAt": "2026-01-30T10:00:01Z",
+      "inputs": {
+        "url": "https://example.com/report.pdf"
+      },
+      "outputs": {
+        "status_code": 200
+      },
+      "errorMessage": null,
+      "executionOrder": 1
+    },
+    {
+      "stepId": "generate_ppt",
+      "stepName": "generate_ppt",
+      "capabilityId": "doc.ppt.generate",
+      "agentName": "aegis",
+      "status": "completed",
+      "startedAt": "2026-01-30T10:00:01Z",
+      "completedAt": "2026-01-30T10:00:05Z",
+      "inputs": {
+        "source": "report.pdf"
+      },
+      "outputs": {
+        "artifact": "report.pptx"
+      },
+      "errorMessage": null,
+      "executionOrder": 2
+    }
+  ],
+  "userId": "user-001",
+  "metadata": null
+}

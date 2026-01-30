@@ -1,0 +1,30 @@
+name: web-research
+version: 1.0.0
+description: Research the web safely via a governed browser sidecar
+
+triggers:
+  - web research
+  - browse and snapshot
+  - find info on a website
+
+examples:
+  - user: "Research https://example.com"
+
+routes:
+  primary:
+    type: workflow
+    ref: web_research
+
+constraints:
+  requires_pack_active: true
+  supported_environments:
+    - prod
+    - staging
+
+metadata:
+  category: web
+  compatible_with:
+    - claude-skill
+    - copilot-skill
+  owner: ai-first
+  maturity: beta

@@ -1,0 +1,37 @@
+workflow_id: web_research
+name: web_research
+version: 1.0.0
+description: Navigate and snapshot a page for web research
+
+metadata:
+  owner: ai-first
+  pack_id: pack.web.research
+  pack_name: web-research-pack
+  pack_version: 1.0.0
+
+initial_state:
+  url: https://example.com
+
+steps:
+  - name: navigate
+    step_type: ACTION
+    agent_name: web_research
+    capability_name: web.browser.navigate
+    inputs:
+      url: "{{ url }}"
+    timeout_seconds: 30
+
+  - name: snapshot
+    step_type: ACTION
+    agent_name: web_research
+    capability_name: web.browser.snapshot
+    depends_on:
+      - navigate
+    inputs:
+      url: "{{ url }}"
+    timeout_seconds: 60
+
+policy: []
+global_compensation_steps: []
+max_execution_time_seconds: 300
+enable_auto_rollback: true

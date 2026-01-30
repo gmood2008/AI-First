@@ -1,0 +1,28 @@
+{
+  "id": "11111111111111111111111111111111",
+  "executionId": "exec_golden_failure",
+  "traceId": "trace_golden_failure",
+  "parentTraceId": null,
+  "capabilityId": "io.fs.read_file",
+  "capabilityName": "io.fs.read_file",
+  "input": {
+    "path": "/path/does/not/exist"
+  },
+  "output": null,
+  "status": "failure",
+  "error": {
+    "category": "RESOURCE_NOT_FOUND",
+    "message": "File not found: /path/does/not/exist",
+    "details": null,
+    "recoverable": false,
+    "retryable": false
+  },
+  "startTime": "2026-01-30T00:00:00Z",
+  "endTime": "2026-01-30T00:00:01Z",
+  "durationMs": 1000.0,
+  "userId": "user_golden",
+  "metadata": {
+    "source": "golden",
+    "mode": "local-bridge"
+  }
+}

@@ -82,6 +82,42 @@ class JSONStringifyHandler(ActionHandler):
             }
 
 
+class JSONGetHandler(ActionHandler):
+    """Handler for data.json.get"""
+
+    def execute(self, params: Dict[str, Any], context: Any) -> Dict[str, Any]:
+        json_string = params["json_string"]
+        path = params["path"]
+
+        try:
+            data = json.loads(json_string)
+            cur: Any = data
+            for part in path.split("."):
+                if isinstance(cur, list):
+                    idx = int(part)
+                    cur = cur[idx]
+                elif isinstance(cur, dict):
+                    cur = cur[part]
+                else:
+                    raise KeyError(part)
+
+            if isinstance(cur, (dict, list)):
+                value = json.dumps(cur, ensure_ascii=False)
+            else:
+                value = str(cur)
+
+            return {
+                "value": value,
+                "success": True,
+            }
+        except Exception as e:
+            return {
+                "value": "",
+                "success": False,
+                "error_message": str(e),
+            }
+
+
 class RegexMatchHandler(ActionHandler):
     """Handler for text.regex.match"""
     

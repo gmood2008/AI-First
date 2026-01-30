@@ -1,0 +1,61 @@
+workflow_id: load_test_quick
+name: load_test_quick
+version: 1.0.0
+description: Minimal deterministic workflow for load testing (stdlib-only)
+
+metadata:
+  owner: load_test
+  pack_id: pack.load.test
+  pack_name: load-test-pack
+  pack_version: 1.0.0
+
+initial_state:
+  run_id: ""
+
+steps:
+  - name: get_time
+    step_type: ACTION
+    agent_name: load_test
+    capability_name: sys.info.get_time
+    inputs:
+      format: iso8601
+      timezone: utc
+    timeout_seconds: 10
+
+  - name: render_content
+    step_type: ACTION
+    agent_name: load_test
+    capability_name: text.template.render
+    depends_on:
+      - get_time
+    inputs:
+      template: "run_id={{run_id}}\nts={{timestamp}}\n"
+      variables: '{"run_id": "{{run_id}}", "timestamp": "{{timestamp}}"}'
+    timeout_seconds: 10
+
+  - name: write_file
+    step_type: ACTION
+    agent_name: load_test
+    capability_name: io.fs.write_file
+    depends_on:
+      - render_content
+    inputs:
+      path: "out.txt"
+      content: "{{ rendered }}"
+      create_dirs: false
+    timeout_seconds: 10
+
+  - name: hash_file
+    step_type: ACTION
+    agent_name: load_test
+    capability_name: io.fs.hash_file
+    depends_on:
+      - write_file
+    inputs:
+      path: "out.txt"
+    timeout_seconds: 10
+
+policy: []
+global_compensation_steps: []
+max_execution_time_seconds: 60
+enable_auto_rollback: true

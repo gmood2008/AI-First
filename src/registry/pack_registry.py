@@ -150,8 +150,8 @@ class PackRegistry:
     def register_pack(
         self,
         pack_spec: CapabilityPackSpec,
-        registered_by: str,
-        proposal_id: str,
+        registered_by: Optional[str] = None,
+        proposal_id: Optional[str] = None,
     ) -> None:
         """
         Register a Pack Proposal.
@@ -232,7 +232,11 @@ class PackRegistry:
                 f"< capability risk {max_cap_risk.value}"
             )
 
-        # TODO(v3.2): validate workflow risk envelopes
+        # Workflow risk envelopes: ensure referenced workflow IDs are valid.
+        # When WorkflowSpec gains a risk_level field, enforce pack max_risk >= workflow risk.
+        for wid in (pack.includes.workflows or []):
+            if not wid or not str(wid).strip():
+                raise InvalidPackError("Pack includes empty workflow ID")
 
     # =========================
     # Queries
@@ -260,15 +264,54 @@ class PackRegistry:
         latest = max(matches, key=lambda p: p["pack_version"])
         return CapabilityPackSpec.from_dict(latest["pack_spec"])
 
+    def get_pack_record(
+        self,
+        pack_ref: str,
+        version: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        # Prefer exact pack_id match
+        matches = [
+            p for p in self._packs.values()
+            if p["pack_id"] == pack_ref
+        ]
+        if not matches:
+            matches = [
+                p for p in self._packs.values()
+                if p["pack_name"] == pack_ref
+            ]
+        if not matches:
+            return None
+
+        if version:
+            for p in matches:
+                if p["pack_version"] == version:
+                    return p
+            return None
+
+        latest = max(matches, key=lambda p: p["pack_version"])
+        return latest
+
+    def get_pack_state(
+        self,
+        pack_ref: str,
+        version: Optional[str] = None,
+    ) -> Optional[PackState]:
+        rec = self.get_pack_record(pack_ref=pack_ref, version=version)
+        return rec["state"] if rec else None
+
     def list_packs(
         self,
         state: Optional[PackState] = None,
+        pack_name: Optional[str] = None,
     ) -> List[CapabilityPackSpec]:
-        return [
+        result = [
             CapabilityPackSpec.from_dict(p["pack_spec"])
             for p in self._packs.values()
             if state is None or p["state"] == state
         ]
+        if pack_name is not None:
+            result = [spec for spec in result if spec.name == pack_name]
+        return result
 
     # =========================
     # Governance (State Changes)
@@ -281,8 +324,8 @@ class PackRegistry:
         new_state: PackState,
         changed_by: str,
         reason: str,
-        proposal_id: str,
-        approval_id: str,
+        proposal_id: Optional[str] = None,
+        approval_id: Optional[str] = None,
     ) -> None:
         key = f"{pack_id}@{version}"
         if key not in self._packs:

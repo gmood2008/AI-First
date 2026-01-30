@@ -7,6 +7,7 @@ a stack of reversible actions with backup data.
 
 import json
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -71,7 +72,7 @@ class UndoManager:
             old_record = self.stack.pop(0)
             self._cleanup_backup(old_record)
         
-        print(f"📝 Recorded undo: {capability_id} (stack size: {len(self.stack)})")
+        print(f"📝 Recorded undo: {capability_id} (stack size: {len(self.stack)})", file=sys.stderr)
     
     def push(self, record: UndoRecord) -> None:
         """
@@ -91,7 +92,7 @@ class UndoManager:
             old_record = self.stack.pop(0)
             self._cleanup_backup(old_record)
         
-        print(f"📝 Pushed undo record: {record.capability_id} (stack size: {len(self.stack)})")
+        print(f"📝 Pushed undo record: {record.capability_id} (stack size: {len(self.stack)})", file=sys.stderr)
     
     def rollback(self, steps: int = 1, signal_bus=None) -> List[UndoRecord]:
         """

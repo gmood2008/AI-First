@@ -5,11 +5,11 @@ This module provides the registry that maps capability IDs to their handler impl
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import yaml
 
-from .handler import ActionHandler
-from .types import CapabilityInfo, CapabilityNotFoundError
+from ..handler import ActionHandler
+from ..types import CapabilityInfo, CapabilityNotFoundError
 
 
 class CapabilityRegistry:
@@ -62,7 +62,7 @@ class CapabilityRegistry:
         if self._governance_enforced and capability_id not in self._governance_approved:
             # Allow stdlib capabilities (loaded at startup)
             # But warn for other registrations
-            if not capability_id.startswith(("io.", "net.", "sys.", "data.")):
+            if not capability_id.startswith(("io.", "net.", "sys.", "data.", "math.", "text.")):
                 raise RuntimeError(
                     f"❌ SECURITY: Direct registration of '{capability_id}' is forbidden. "
                     f"All new capabilities must pass through governance approval. "
@@ -153,42 +153,10 @@ class CapabilityRegistry:
             ValueError: If capability_id is already registered
             ImportError: If adapter module is not available
         """
-        if capability_id in self._handlers:
-            raise ValueError(f"Capability '{capability_id}' is already registered")
-        
-        try:
-            from runtime.adapters import create_adapter
-            
-            # Create adapter
-            adapter = create_adapter(adapter_type, adapter_config)
-            
-            # Create spec if not provided
-            if spec_dict is None:
-                # Try to load from file
-                spec_path = Path(f"capabilities/validated/external/{capability_id}.yaml")
-                if spec_path.exists():
-                    import yaml
-                    with open(spec_path, "r") as f:
-                        spec_dict = yaml.safe_load(f)
-                else:
-                    raise ValueError(
-                        f"Spec not found for external capability '{capability_id}'. "
-                        f"Please provide spec_dict or ensure spec file exists at {spec_path}"
-                    )
-            
-            # Create handler from adapter
-            handler = adapter.create_handler(spec_dict)
-            
-            # Register
-            self.register(capability_id, handler, spec_dict)
-            
-            print(f"✅ Registered external capability: {capability_id} (via {adapter_type} adapter)")
-        
-        except ImportError as e:
-            raise ImportError(
-                f"Failed to import adapter module: {e}. "
-                f"Make sure runtime.adapters is available."
-            ) from e
+        raise RuntimeError(
+            "SECURITY: Direct external capability registration is forbidden. "
+            "Use proposal + governance approval pipeline instead."
+        )
     
     def get_handler(self, capability_id: str) -> ActionHandler:
         """

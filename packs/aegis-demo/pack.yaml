@@ -1,0 +1,24 @@
+pack_id: aegis-demo-pack
+name: aegis-demo
+version: 1.0.0
+
+description: >
+  Aegis integration demo pack (stdlib-only). Demonstrates a typical Quest-style
+  workflow producing artifacts inside a workspace, plus governance PAUSE/DENY.
+
+state: ACTIVE
+
+includes:
+  capabilities:
+    - io.fs.write_file
+    - io.fs.read_file
+    - io.fs.list_dir
+  workflows:
+    - aegis_financial_summary_ppt
+
+risk_profile:
+  max_risk: MEDIUM
+  justification: >
+    Demo pack only writes files inside the workspace.
+  requires_human_approval: false
+  auto_rollback_on_failure: true

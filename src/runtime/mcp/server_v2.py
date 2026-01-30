@@ -27,26 +27,29 @@ from mcp.types import (
     ListToolsResult,
 )
 
-# Import AI-First runtime components
+# Import AI-First runtime components (src must be on path so "from runtime.xxx" works)
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
+_src_root = Path(__file__).resolve().parent.parent.parent  # src/
+if str(_src_root) not in sys.path:
+    sys.path.insert(0, str(_src_root))
 
 from runtime.engine import RuntimeEngine
 from runtime.types import ExecutionContext
-from runtime.registry import CapabilityRegistry
+from runtime.registry import CapabilityRegistry, SkillFacadeRegistry
 from runtime.stdlib.loader import load_stdlib
+from runtime.facade_loader import load_facades_from_directory
+from runtime.facade_router import resolve_and_validate
+from runtime.pack_loader import load_packs_from_directory
+from src.registry.pack_registry import PackRegistry
+from src.runtime.workflow.engine import WorkflowEngine
+from src.runtime.workflow.spec_loader import load_workflow_spec_by_id
 from runtime.undo.manager import UndoManager
 from runtime.audit import AuditLogger
 from runtime.security.sandbox import PathSandbox
 from runtime.mcp.schema_translator import create_mcp_tools_from_stdlib
 from runtime.session.persistence import SessionPersistence, PersistedUndoRecord
 from runtime.mcp.specs_resolver import resolve_specs_dir
-
-# Import missing function
-def resolve_specs_dir(custom_path=None):
-    """Resolve specs directory"""
-    from runtime.mcp.specs_resolver import resolve_specs_dir as _resolve
-    return _resolve(custom_path=custom_path) if custom_path else _resolve()
+from runtime.paths import facades_dir as resolve_facades_dir, packs_dir as resolve_packs_dir
 
 
 class AIFirstMCPServer:
@@ -93,16 +96,6 @@ class AIFirstMCPServer:
         # Initialize runtime components
         self.registry = CapabilityRegistry()
         
-        # Load external capabilities (if external directory exists)
-        try:
-            from runtime.external_loader import load_external_capabilities
-            external_dir = self.specs_dir.parent / "external"
-            if external_dir.exists():
-                load_external_capabilities(self.registry, external_dir)
-        except ImportError:
-            # External loader not available, skip
-            pass
-        
         # Create undo manager first
         self.backup_dir = self.workspace_root / ".backups"
         self.backup_dir.mkdir(parents=True, exist_ok=True)
@@ -138,7 +131,7 @@ class AIFirstMCPServer:
         # Load standard library handlers (no emoji output to avoid JSON parsing errors)
         load_stdlib(self.registry, self.specs_dir)
         
-        # Load external capabilities (if external directory exists)
+        # Load external capability proposals (if external directory exists)
         try:
             from runtime.external_loader import load_external_capabilities
             external_dir = self.specs_dir.parent / "external"
@@ -150,6 +143,29 @@ class AIFirstMCPServer:
         
         # Generate MCP tool definitions
         self.tool_definitions = create_mcp_tools_from_stdlib(self.specs_dir)
+        
+        # Skill Facade: NL -> workflow/pack route (no execution here)
+        self.facade_registry = SkillFacadeRegistry()
+        _facades_dir = resolve_facades_dir()
+        if _facades_dir.exists():
+            load_facades_from_directory(
+                self.facade_registry, _facades_dir, activate=False, registered_by="mcp"
+            )
+
+        # Pack Registry: used for validating ACTIVE state and scoping workflow execution
+        self.pack_registry = PackRegistry(capability_registry=None)
+        _packs_dir = resolve_packs_dir()
+        if _packs_dir.exists():
+            load_packs_from_directory(
+                self.pack_registry, _packs_dir, activate=False, registered_by="mcp"
+            )
+
+        # Workflow Engine: used for workflow execution path
+        self.workflow_engine = WorkflowEngine(
+            runtime_engine=self.engine,
+            execution_context=None,
+            pack_registry=self.pack_registry,
+        )
         
         # Register handlers
         self._register_handlers()
@@ -247,6 +263,47 @@ class AIFirstMCPServer:
         # Handle special sys.undo tool
         if capability_id == "sys.undo":
             return await self._handle_undo(params)
+        
+        # Natural language / Facade: try Skill Facade match before capability
+        route = resolve_and_validate(capability_id, self.facade_registry, self.pack_registry)
+        if route is not None:
+            if route.route_type == "workflow":
+                try:
+                    spec = load_workflow_spec_by_id(route.ref)
+                    workflow_id = self.workflow_engine.submit_workflow(spec)
+                    self.workflow_engine.start_workflow(workflow_id)
+                    return {
+                        "status": "workflow_started",
+                        "facade_name": route.facade.name,
+                        "workflow_id": workflow_id,
+                        "workflow_name": spec.name,
+                        "message": f"Workflow '{spec.name}' started via facade '{route.facade.name}'.",
+                    }
+                except Exception as e:
+                    return {
+                        "status": "error",
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "facade_name": route.facade.name,
+                        "route_type": route.route_type,
+                        "ref": route.ref,
+                    }
+
+            if route.route_type == "pack":
+                return {
+                    "status": "pack_resolved",
+                    "facade_name": route.facade.name,
+                    "pack_ref": route.ref,
+                    "allowed_workflows": route.allowed_workflows or [],
+                    "message": "Resolved to pack. Choose a workflow within allowed_workflows.",
+                }
+
+            return {
+                "status": "facade_resolved",
+                "facade_name": route.facade.name,
+                "route_type": route.route_type,
+                "ref": route.ref,
+            }
         
         # Create execution context
         # Note: We handle confirmation at the server level (dry-run pattern),

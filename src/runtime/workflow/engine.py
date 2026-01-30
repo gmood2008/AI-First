@@ -23,8 +23,9 @@ from datetime import datetime
 import logging
 import asyncio
 from enum import Enum
+import re
 
-from src.specs.v3.workflow_schema import (
+from specs.v3.workflow_schema import (
     WorkflowSpec,
     WorkflowStatus,
     WorkflowStep,
@@ -39,7 +40,7 @@ import yaml
 
 # Pack Registry integration (optional)
 try:
-    from src.registry.pack_registry import PackRegistry, PackState
+    from registry.pack_registry import PackRegistry, PackState
     PACK_REGISTRY_AVAILABLE = True
 except ImportError:
     PACK_REGISTRY_AVAILABLE = False
@@ -56,6 +57,12 @@ class StepExecutionResult(Enum):
     FAILURE = "FAILURE"
     PAUSED = "PAUSED"  # For human approval
     SKIPPED = "SKIPPED"
+
+
+class GovernanceDecision(Enum):
+    ALLOW = "ALLOW"
+    DENY = "DENY"
+    PAUSE = "PAUSE"
 
 
 class WorkflowExecutionContext:
@@ -79,6 +86,7 @@ class WorkflowExecutionContext:
     def mark_step_completed(self, step_name: str, result: Dict[str, Any]):
         """Mark a step as completed and update state"""
         self.completed_steps.append(step_name)
+        self.state[step_name] = result
         self.state.update(result)
         logger.info(f"Step '{step_name}' completed. State updated.")
 
@@ -110,9 +118,12 @@ class WorkflowEngine:
             runtime_engine=None,
             execution_context=None,
             policy_engine=None,
+            constitution_engine=None,
+            watchdog=None,
             persistence=None,
             approval_manager=None,
-            pack_registry=None):
+            pack_registry=None,
+            governance_hooks: Optional[Dict[str, Callable[..., Any]]] = None):
         """
         Initialize the workflow engine.
 
@@ -127,10 +138,13 @@ class WorkflowEngine:
         self.runtime_engine = runtime_engine
         self.execution_context = execution_context
         self.policy_engine = policy_engine
+        self.constitution_engine = constitution_engine
+        self.watchdog = watchdog
         self.persistence = persistence or WorkflowPersistence()
         self.recovery = WorkflowRecovery(self, self.persistence)
         self.approval_manager = approval_manager or HumanApprovalManager()
         self.pack_registry = pack_registry
+        self.governance_hooks = governance_hooks or {}
         self.workflows: Dict[str, WorkflowExecutionContext] = {}
 
         # Auto-resume running workflows on startup
@@ -193,7 +207,7 @@ class WorkflowEngine:
 
         # Create execution context
         context = WorkflowExecutionContext(spec)
-        workflow_id = spec.metadata.workflow_id or str(uuid.uuid4())
+        workflow_id = str(uuid.uuid4())
         spec.metadata.workflow_id = workflow_id
 
         # Register the workflow
@@ -283,6 +297,27 @@ class WorkflowEngine:
         context.started_at = datetime.utcnow()
 
         logger.info(f"Workflow {workflow_id} started")
+
+        hook = self.governance_hooks.get("pre_execution")
+        if hook is not None:
+            decision = hook(
+                trace_id=(getattr(self.execution_context, "metadata", {}) or {}).get("traceId"),
+                workflow_id=workflow_id,
+                workflow_spec=context.spec,
+                context=self.execution_context,
+            )
+            if decision == GovernanceDecision.DENY or str(decision) == GovernanceDecision.DENY.value:
+                msg = "Governance denied workflow execution"
+                self._handle_workflow_failure(context, msg)
+                raise RuntimeError(msg)
+            if decision == GovernanceDecision.PAUSE or str(decision) == GovernanceDecision.PAUSE.value:
+                self.persistence.update_workflow_status(
+                    workflow_id=workflow_id,
+                    status=WorkflowStatus.PAUSED,
+                )
+                context.spec.metadata.status = WorkflowStatus.PAUSED
+                context.spec.metadata.updated_at = datetime.utcnow()
+                return
 
         # Execute steps
         try:
@@ -447,6 +482,42 @@ class WorkflowEngine:
         logger.info(
             f"Executing step '{step.name}' (capability: {step.capability_name})")
 
+        if self.watchdog:
+            try:
+                workflow_id = context.spec.metadata.workflow_id
+                self.watchdog.enforce_not_expired(
+                    workflow_id=workflow_id,
+                    metadata={"workflow": context.spec.name, "step": step.name},
+                )
+            except Exception as e:
+                error_msg = f"Watchdog timeout: {e}"
+                logger.error(error_msg)
+                context.mark_step_failed(step.name, error_msg)
+                return StepExecutionResult.FAILURE
+
+        if self.constitution_engine:
+            workflow_owner = context.spec.metadata.owner
+            side_effects: List[str] = []
+            try:
+                if self.runtime_engine and hasattr(self.runtime_engine, "registry"):
+                    handler = self.runtime_engine.registry.get_handler(step.capability_name)
+                    side_effects = handler.contracts.get("side_effects", []) if getattr(handler, "contracts", None) else []
+            except Exception:
+                side_effects = []
+
+            try:
+                self.constitution_engine.enforce(
+                    capability_id=step.capability_name,
+                    principal=workflow_owner,
+                    side_effects=side_effects,
+                    context={"workflow": context.spec.name, "step": step.name},
+                )
+            except Exception as e:
+                error_msg = f"Constitution denied: {step.capability_name} ({e})"
+                logger.error(error_msg)
+                context.mark_step_failed(step.name, error_msg)
+                return StepExecutionResult.FAILURE
+
         # POLICY CHECK: Verify permission before execution
         if self.policy_engine:
             from runtime.workflow.policy_engine import PolicyDecision
@@ -513,6 +584,50 @@ class WorkflowEngine:
                 # Resolve inputs with template variables
                 resolved_params = self._resolve_inputs(context, step.inputs)
 
+                hook = self.governance_hooks.get("pre_step")
+                if hook is not None:
+                    decision = hook(
+                        trace_id=(getattr(self.execution_context, "metadata", {}) or {}).get("traceId"),
+                        workflow_id=context.spec.metadata.workflow_id,
+                        step=step,
+                        resolved_inputs=resolved_params,
+                        context=self.execution_context,
+                    )
+                    if decision == GovernanceDecision.DENY or str(decision) == GovernanceDecision.DENY.value:
+                        error_msg = f"Governance denied step: {step.name}"
+                        context.mark_step_failed(step.name, error_msg)
+                        self.recovery.checkpoint_step(
+                            workflow_id=context.spec.metadata.workflow_id,
+                            step_id=step.name,
+                            step_name=step.name,
+                            capability_id=step.capability_name,
+                            agent_name=step.agent_name,
+                            status="FAILED",
+                            execution_order=len(context.completed_steps),
+                            inputs=resolved_params,
+                            outputs={},
+                            error_message=error_msg,
+                        )
+                        return StepExecutionResult.FAILURE
+                    if decision == GovernanceDecision.PAUSE or str(decision) == GovernanceDecision.PAUSE.value:
+                        workflow_id = context.spec.metadata.workflow_id
+                        self.persistence.update_workflow_status(
+                            workflow_id=workflow_id,
+                            status=WorkflowStatus.PAUSED,
+                        )
+                        self.recovery.checkpoint_step(
+                            workflow_id=workflow_id,
+                            step_id=step.name,
+                            step_name=step.name,
+                            capability_id=step.capability_name,
+                            agent_name=step.agent_name,
+                            status="PAUSED",
+                            execution_order=len(context.completed_steps),
+                            inputs=resolved_params,
+                            outputs={},
+                        )
+                        return StepExecutionResult.PAUSED
+
                 # RETRY LOGIC: Attempt execution with retries
                 max_retries = step.max_retries or 3
                 last_error = None
@@ -564,6 +679,17 @@ class WorkflowEngine:
                     outputs=execution_result.outputs
                 )
 
+                hook = self.governance_hooks.get("post_step")
+                if hook is not None:
+                    hook(
+                        trace_id=(getattr(self.execution_context, "metadata", {}) or {}).get("traceId"),
+                        workflow_id=context.spec.metadata.workflow_id,
+                        step=step,
+                        resolved_inputs=resolved_params,
+                        result=execution_result,
+                        context=self.execution_context,
+                    )
+
                 # CRITICAL: Extract undo closure from RuntimeEngine's UndoRecord
                 # This unifies v2.0 "Atomic Undo" with v3.0 "Workflow Rollback"
                 if execution_result.undo_record:
@@ -595,6 +721,17 @@ class WorkflowEngine:
 
             except Exception as e:
                 context.mark_step_failed(step.name, str(e))
+
+                hook = self.governance_hooks.get("post_step")
+                if hook is not None:
+                    hook(
+                        trace_id=(getattr(self.execution_context, "metadata", {}) or {}).get("traceId"),
+                        workflow_id=context.spec.metadata.workflow_id,
+                        step=step,
+                        resolved_inputs=None,
+                        result={"status": "FAILURE", "error": str(e)},
+                        context=self.execution_context,
+                    )
                 return StepExecutionResult.FAILURE
         else:
             # No runtime engine (for testing)
@@ -603,22 +740,56 @@ class WorkflowEngine:
             context.mark_step_completed(step.name, {"status": "simulated"})
             return StepExecutionResult.SUCCESS
 
-    def _resolve_inputs(self, context: WorkflowExecutionContext,
-                        inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Resolve template variables in step inputs.
+    def _resolve_inputs(
+        self,
+        context: WorkflowExecutionContext,
+        inputs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Resolve template variables in step inputs."""
 
-        Example: {"name": "{{customer_name}}"} -> {"name": "Acme Corp"}
-        """
-        resolved = {}
-        for key, value in inputs.items():
-            if isinstance(value, str) and value.startswith(
-                    "{{") and value.endswith("}}"):
-                var_name = value[2:-2].strip()
-                resolved[key] = context.state.get(var_name, value)
-            else:
-                resolved[key] = value
-        return resolved
+        pattern = re.compile(r"\{\{\s*([a-zA-Z0-9_\-\.]+)\s*\}\}")
+        full_pattern = re.compile(r"^\{\{\s*([a-zA-Z0-9_\-\.]+)\s*\}\}$")
+
+        def _resolve_value(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {k: _resolve_value(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_resolve_value(v) for v in value]
+            if isinstance(value, str):
+                def _get_state_value(path: str) -> Any:
+                    cur: Any = context.state
+                    for part in path.split("."):
+                        if not isinstance(cur, dict):
+                            return None
+                        if part not in cur:
+                            return None
+                        cur = cur[part]
+                    return cur
+
+                m_full = full_pattern.match(value)
+                if m_full:
+                    v_full = _get_state_value(m_full.group(1))
+                    if v_full is not None:
+                        return v_full
+
+                def _sub(m: re.Match) -> str:
+                    var_name = m.group(1)
+                    v = _get_state_value(var_name)
+                    if v is None:
+                        return m.group(0)
+                    if isinstance(v, (dict, list)):
+                        try:
+                            import json
+
+                            return json.dumps(v, ensure_ascii=False, indent=2)
+                        except Exception:
+                            return str(v)
+                    return str(v)
+
+                return pattern.sub(_sub, value)
+            return value
+
+        return _resolve_value(inputs)
 
     def _create_compensation_closure(self,
                                      context: WorkflowExecutionContext,
@@ -663,8 +834,25 @@ class WorkflowEngine:
         context.spec.metadata.updated_at = datetime.utcnow()
         context.completed_at = datetime.utcnow()
 
+        try:
+            self.persistence.update_workflow_status(
+                workflow_id=context.spec.metadata.workflow_id,
+                status=WorkflowStatus.COMPLETED,
+            )
+        except Exception:
+            pass
+
         logger.info(
             f"Workflow {context.spec.metadata.workflow_id} completed successfully")
+
+        hook = self.governance_hooks.get("post_execution")
+        if hook is not None:
+            hook(
+                trace_id=(getattr(self.execution_context, "metadata", {}) or {}).get("traceId"),
+                workflow_id=context.spec.metadata.workflow_id,
+                summary={"status": "SUCCESS"},
+                context=self.execution_context,
+            )
 
     def _handle_workflow_failure(
             self,
@@ -684,9 +872,27 @@ class WorkflowEngine:
         spec.metadata.updated_at = datetime.utcnow()
         context.error_message = error
 
+        try:
+            self.persistence.update_workflow_status(
+                workflow_id=spec.metadata.workflow_id,
+                status=WorkflowStatus.FAILED,
+                error_message=error,
+            )
+        except Exception:
+            pass
+
         # Trigger rollback if enabled
         if spec.enable_auto_rollback:
             self._rollback_workflow(context)
+
+        hook = self.governance_hooks.get("post_execution")
+        if hook is not None:
+            hook(
+                trace_id=(getattr(self.execution_context, "metadata", {}) or {}).get("traceId"),
+                workflow_id=context.spec.metadata.workflow_id,
+                summary={"status": "FAILED", "error": error},
+                context=self.execution_context,
+            )
 
     def _rollback_workflow(self, context: WorkflowExecutionContext):
         """
@@ -784,6 +990,12 @@ class WorkflowEngine:
             approver: Who made the decision (optional)
         """
         if workflow_id not in self.workflows:
+            try:
+                self._auto_resume_workflows()
+            except Exception:
+                pass
+
+        if workflow_id not in self.workflows:
             raise ValueError(f"Workflow {workflow_id} not found")
 
         context = self.workflows[workflow_id]
@@ -798,6 +1010,15 @@ class WorkflowEngine:
         if decision == "approve":
             logger.info(
                 f"Workflow {workflow_id} approved by {approver}. Resuming...")
+            # Mark paused steps as completed in persistence so bridge output reflects post-approval progress.
+            try:
+                self.persistence.update_workflow_step_statuses(
+                    workflow_id=workflow_id,
+                    from_status="paused",
+                    to_status="completed",
+                )
+            except Exception:
+                pass
             # Update status to RUNNING
             self.persistence.update_workflow_status(
                 workflow_id, WorkflowStatus.RUNNING)
@@ -821,3 +1042,37 @@ class WorkflowEngine:
         else:
             raise ValueError(
                 f"Invalid decision: {decision}. Must be 'approve' or 'reject'.")
+
+    def cancel_workflow(
+            self,
+            workflow_id: str,
+            reason: str = "Cancelled",
+            rollback: bool = False) -> None:
+        if workflow_id not in self.workflows:
+            try:
+                self._auto_resume_workflows()
+            except Exception:
+                pass
+
+        if rollback:
+            try:
+                self.recovery.rollback_workflow(workflow_id, reason=reason)
+            except Exception:
+                pass
+
+        self.persistence.update_workflow_status(
+            workflow_id=workflow_id,
+            status=WorkflowStatus.FAILED,
+            error_message=reason,
+        )
+
+        context = self.workflows.get(workflow_id)
+        if context is not None:
+            context.error_message = reason
+            context.spec.metadata.status = WorkflowStatus.FAILED
+
+    def rollback_workflow(self, workflow_id: str, reason: str = "Manual rollback") -> bool:
+        try:
+            return self.recovery.rollback_workflow(workflow_id, reason=reason)
+        except Exception:
+            return False

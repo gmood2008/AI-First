@@ -5,7 +5,7 @@ Lifecycle State Machine - 生命周期状态机
 """
 
 from enum import Enum
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 from dataclasses import dataclass
 from datetime import datetime
 import json

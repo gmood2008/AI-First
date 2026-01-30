@@ -1,0 +1,51 @@
+{
+  "id": "<uuid>",
+  "executionId": "exec-002",
+  "traceId": "trace-002",
+  "parentTraceId": null,
+  "questId": "quest-002",
+  "workflowExecutionId": "<workflow-exec-id>",
+  "workflowName": "example_workflow",
+  "status": "failure",
+  "error": {
+    "category": "VALIDATION_ERROR",
+    "message": "Workflow failed",
+    "recoverable": false,
+    "retryable": false
+  },
+  "startTime": "2026-01-30T10:10:00Z",
+  "endTime": "2026-01-30T10:10:02Z",
+  "workflow": {
+    "id": "<workflow-exec-id>",
+    "name": "example_workflow",
+    "owner": "aegis",
+    "status": "failed",
+    "createdAt": "2026-01-30T10:10:00Z",
+    "updatedAt": "2026-01-30T10:10:02Z",
+    "startedAt": "2026-01-30T10:10:00Z",
+    "completedAt": "2026-01-30T10:10:02Z",
+    "errorMessage": "Invalid workflow spec: ...",
+    "rollbackReason": null
+  },
+  "steps": [
+    {
+      "stepId": "fetch_report",
+      "stepName": "fetch_report",
+      "capabilityId": "io.http.get",
+      "agentName": "aegis",
+      "status": "failed",
+      "startedAt": "2026-01-30T10:10:00Z",
+      "completedAt": "2026-01-30T10:10:02Z",
+      "inputs": {
+        "url": "invalid-url"
+      },
+      "outputs": null,
+      "errorMessage": "validation failed",
+      "executionOrder": 1
+    }
+  ],
+  "userId": "user-002",
+  "metadata": {
+    "failureCategory": "VALIDATION_ERROR"
+  }
+}

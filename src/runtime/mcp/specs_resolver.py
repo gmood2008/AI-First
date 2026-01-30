@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from runtime.paths import stdlib_specs_dir
+
 
 def resolve_specs_dir(custom_path: Optional[Path] = None) -> Path:
     """
@@ -63,8 +65,13 @@ def resolve_specs_dir(custom_path: Optional[Path] = None) -> Path:
                 f"AI_FIRST_SPECS_DIR environment variable points to non-existent directory: {specs_path}\n"
                 f"Please update the environment variable or clone ai-first-specs repository."
             )
+
+    # Priority 3: Installed package assets (share/ai-first-runtime)
+    packaged_stdlib = stdlib_specs_dir()
+    if packaged_stdlib.exists():
+        return packaged_stdlib
     
-    # Priority 3: Relative path (sibling directory)
+    # Priority 4: Relative path (sibling directory)
     # Assuming structure:
     # parent/
     #   ai-first-runtime/
@@ -75,11 +82,14 @@ def resolve_specs_dir(custom_path: Optional[Path] = None) -> Path:
     # Get the root of ai-first-runtime (4 levels up from this file)
     runtime_root = Path(__file__).parent.parent.parent.parent
     sibling_specs = runtime_root.parent / "ai-first-specs" / "capabilities" / "validated" / "stdlib"
-    
+    in_repo_stdlib = runtime_root / "capabilities" / "validated" / "stdlib"
+
     if sibling_specs.exists():
         return sibling_specs
-    
-    # Priority 4: Clear error message
+    if in_repo_stdlib.exists():
+        return in_repo_stdlib
+
+    # Priority 5: Clear error message
     raise FileNotFoundError(
         "❌ AI-First specs directory not found!\n\n"
         "The ai-first-specs repository is required but could not be located.\n\n"

@@ -2,10 +2,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 62%](https://img.shields.io/badge/tests-62%25-yellow.svg)]()
-[![Version: 3.0.0-alpha.1](https://img.shields.io/badge/version-3.0.0--alpha.1-orange.svg)]()
+[![Tests: 62%](https://img.shields.io/badge/tests-62%25-yellow.svg)](https://github.com/gmood2008/ai-first-runtime/actions)
+[![Version: 3.0.0-alpha.1](https://img.shields.io/badge/version-3.0.0--alpha.1-orange.svg)](https://github.com/gmood2008/ai-first-runtime/releases)
 
-**The Transactional Control Plane for AI Agents**
+## The Transactional Control Plane for AI Agents
 
 AI-First Runtime is the execution and governance layer for multi-agent systems. We don't replace your LLM planner—we control how agents execute, ensuring every action is transactional, auditable, and reversible.
 
@@ -14,6 +14,7 @@ AI-First Runtime is the execution and governance layer for multi-agent systems. 
 ## 🎯 v3.0 Alpha: Workflow Orchestration + Crash Recovery
 
 **New in v3.0:**
+
 - ✅ **Transactional Workflows** - YAML-based workflow definitions with automatic rollback
 - ✅ **Crash Recovery** - Workflows survive process crashes and auto-resume
 - ✅ **Human-in-the-Loop** - Webhook-based approval gates for high-risk operations
@@ -27,7 +28,7 @@ AI-First Runtime is the execution and governance layer for multi-agent systems. 
 
 ## Architecture: 3-Layer Design
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                    Planning Layer                             │
 │            (LLM / AutoGen / CrewAI / Cursor)                  │
@@ -75,6 +76,7 @@ AI-First Runtime is the execution and governance layer for multi-agent systems. 
 ## Why AI-First?
 
 **The Problem:** Enterprises want to deploy AI agents, but they can't answer three critical questions:
+
 1. **"Who controls these agents?"** (Governance)
 2. **"What happens when they fail?"** (Rollback)
 3. **"How do we prove compliance?"** (Audit)
@@ -85,7 +87,8 @@ Existing frameworks (LangChain, LlamaIndex, AutoGen) focus on **planning** but i
 
 ### Our Competitive Moat
 
-**Transactional Workflows for AI Agents**
+#### Transactional Workflows for AI Agents
+
 - Every workflow is a distributed transaction with ACID-like guarantees
 - Automatic rollback on failure (no manual cleanup)
 - Built-in governance (RBAC for agents, risk classification)
@@ -147,6 +150,7 @@ steps:
 Workflows survive process crashes and automatically resume.
 
 **Demo Scenario:**
+
 1. Start workflow (Step 1: Write File A, Step 2: Human Approval)
 2. Step 1 completes, workflow pauses at Step 2
 3. **Process crashes** (simulated)
@@ -156,6 +160,7 @@ Workflows survive process crashes and automatically resume.
 7. Workflow completes successfully ✅
 
 **Implementation:**
+
 - SQLite-based persistence with WAL mode
 - Checkpoint every step execution
 - Store workflow spec, state, and compensation stack
@@ -204,6 +209,7 @@ airun dashboard
 ```
 
 **Features:**
+
 - View all active workflows with status
 - See workflow progress with progress bars
 - Approve/reject pending workflows
@@ -211,6 +217,7 @@ airun dashboard
 - Real-time updates from database
 
 **Keyboard shortcuts:**
+
 - `q` - Quit
 - `r` - Refresh
 - `d` - View workflow details
@@ -220,6 +227,7 @@ airun dashboard
 Our flagship feature from v2.0. Every write operation automatically creates an undo record.
 
 **Demo:**
+
 1. AI writes bad code → Test fails
 2. AI calls `sys.undo()` → Code is restored
 3. AI writes good code → Test passes
@@ -288,6 +296,11 @@ airun workflow run my_workflow.yaml
 - **[Workflow Guide](docs/v3/WORKFLOW_GUIDE.md)** - How to write YAML workflows
 - **[Architecture Guide](docs/v3/ARCHITECTURE.md)** - Deep dive into v3.0 design
 - **[API Reference](docs/v3/API_REFERENCE.md)** - Python API documentation
+- **[Integration Guide](docs/INTEGRATION_GUIDE.md)** - Integration entrypoint (delivery modes, MCP, local bridge)
+- **[Compatibility Contract](docs/COMPATIBILITY_CONTRACT.md)** - SemVer, asset schema evolution, deprecation & rollback policy
+- **[Project Integration Template](docs/PROJECT_INTEGRATION_TEMPLATE.md)** - Copy/paste onboarding template for internal teams
+- **[Plaintext Assets Mode Guide](docs/PLAINTEXT_ASSETS_MODE_GUIDE.md)** - Deep integration mode with externalized YAML/packs/facades
+- **[Internal PyPI Distribution SOP](docs/INTERNAL_PYPI_DISTRIBUTION_SOP.md)** - Internal publishing & upgrade SOP
 - **[Week 3 Status Report](docs/week3_status_report.md)** - Development progress
 
 ---
@@ -295,6 +308,7 @@ airun workflow run my_workflow.yaml
 ## Project Status
 
 **v3.0 Alpha (Week 4):**
+
 - ✅ Workflow persistence with crash recovery
 - ✅ Human-in-the-Loop approval system
 - ✅ TUI dashboard for monitoring
@@ -304,6 +318,7 @@ airun workflow run my_workflow.yaml
 - ⚠️ Parallel execution: Planned
 
 **Roadmap:**
+
 - **Week 5:** Policy engine & RBAC
 - **Week 6:** Parallel execution
 - **Week 7:** Error handling & retry
@@ -326,6 +341,7 @@ pytest tests/v3/ --cov=src/runtime/workflow
 ```
 
 **Current Test Status:**
+
 - Crash recovery: 2/2 ✅
 - Human-in-the-Loop: 4/4 ✅
 - Transactional workflows: 2/3 ⚠️
@@ -338,6 +354,7 @@ pytest tests/v3/ --cov=src/runtime/workflow
 We're in active development and welcome contributions!
 
 **Areas needing help:**
+
 - Test coverage improvements
 - Documentation
 - Example workflows
@@ -355,10 +372,10 @@ MIT License - See [LICENSE](LICENSE) for details
 
 ## Contact
 
-- **GitHub:** https://github.com/gmood2008/ai-first-runtime
-- **Issues:** https://github.com/gmood2008/ai-first-runtime/issues
-- **Email:** gmood2008@gmail.com
+- **GitHub:** <https://github.com/gmood2008/ai-first-runtime>
+- **Issues:** <https://github.com/gmood2008/ai-first-runtime/issues>
+- **Email:** <mailto:gmood2008@gmail.com>
 
 ---
 
-**Built with ❤️ for the AI agent revolution**
+Built with ❤️ for the AI agent revolution.

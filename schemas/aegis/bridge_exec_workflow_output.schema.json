@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-first-runtime.local/schemas/aegis/bridge_exec_workflow_output.schema.json",
+  "title": "AI-First Runtime bridge exec-workflow output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "id",
+    "executionId",
+    "traceId",
+    "workflowExecutionId",
+    "workflowName",
+    "status",
+    "startTime",
+    "endTime",
+    "steps",
+    "userId"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "executionId": { "type": "string", "minLength": 1 },
+    "traceId": { "type": "string", "minLength": 1 },
+    "parentTraceId": { "type": ["string", "null"] },
+    "questId": { "type": ["string", "null"] },
+
+    "workflowExecutionId": { "type": ["string", "null"] },
+    "workflowName": { "type": ["string", "null"] },
+
+    "status": {
+      "type": "string",
+      "enum": ["success", "failure", "paused", "rolled_back", "timeout", "unknown"]
+    },
+
+    "error": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "properties": {
+        "category": { "type": "string" },
+        "message": { "type": "string" },
+        "recoverable": { "type": "boolean" },
+        "retryable": { "type": "boolean" }
+      },
+      "required": ["category", "message", "recoverable", "retryable"]
+    },
+
+    "startTime": { "type": "string" },
+    "endTime": { "type": "string" },
+
+    "workflow": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": ["string", "null"] },
+        "name": { "type": ["string", "null"] },
+        "owner": { "type": ["string", "null"] },
+        "status": { "type": ["string", "null"] },
+        "createdAt": { "type": ["string", "null"] },
+        "updatedAt": { "type": ["string", "null"] },
+        "startedAt": { "type": ["string", "null"] },
+        "completedAt": { "type": ["string", "null"] },
+        "errorMessage": { "type": ["string", "null"] },
+        "rollbackReason": { "type": ["string", "null"] }
+      }
+    },
+
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["stepId", "stepName", "capabilityId", "agentName", "status", "executionOrder"],
+        "properties": {
+          "stepId": { "type": ["string", "null"] },
+          "stepName": { "type": ["string", "null"] },
+          "capabilityId": { "type": ["string", "null"] },
+          "agentName": { "type": ["string", "null"] },
+          "status": { "type": ["string", "null"] },
+          "startedAt": { "type": ["string", "null"] },
+          "completedAt": { "type": ["string", "null"] },
+          "inputs": { "type": ["object", "array", "string", "number", "boolean", "null"] },
+          "outputs": { "type": ["object", "array", "string", "number", "boolean", "null"] },
+          "errorMessage": { "type": ["string", "null"] },
+          "executionOrder": { "type": ["integer", "number"] }
+        }
+      }
+    },
+
+    "userId": { "type": "string", "minLength": 1 },
+
+    "metadata": {
+      "type": ["object", "null"],
+      "additionalProperties": true
+    }
+  }
+}

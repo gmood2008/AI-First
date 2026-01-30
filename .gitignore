@@ -1,2 +1,13 @@
 __pycache__/
 .ai-first/
+
+# Build / packaging artifacts
+dist/
+build/
+*.egg-info/
+
+# Test artifacts
+.coverage
+
+# Local workspace/runtime outputs
+workspace/

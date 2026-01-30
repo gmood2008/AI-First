@@ -21,7 +21,7 @@ import yaml
 import logging
 from enum import Enum
 
-from src.specs.v3.workflow_schema import RiskLevel
+from specs.v3.workflow_schema import RiskLevel
 
 
 logger = logging.getLogger(__name__)

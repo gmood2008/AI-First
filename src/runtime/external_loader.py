@@ -6,7 +6,7 @@ using adapters.
 """
 
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List
 import yaml
 
 from .registry import CapabilityRegistry
@@ -32,7 +32,7 @@ def load_external_capabilities(
     if not external_dir.exists():
         return 0
     
-    loaded_count = 0
+    proposals = []
     errors = []
     
     print(f"📡 Loading External Capabilities from {external_dir}")
@@ -65,31 +65,58 @@ def load_external_capabilities(
                 errors.append(f"❌ {capability_id}: Missing adapter type")
                 continue
             
-            # Extract adapter config
-            adapter_config_dict = {
-                "capability_id": capability_id,
-                **adapter_config.get("config", {})
-            }
-            
-            # Register external capability
-            registry.register_external(
-                capability_id=capability_id,
-                adapter_type=adapter_type,
-                adapter_config=adapter_config_dict,
-                spec_dict=spec_dict
+            proposals.append(
+                {
+                    "capability_id": capability_id,
+                    "adapter": adapter_config,
+                    "spec": spec_dict,
+                    "source_file": str(yaml_file),
+                }
             )
-            
-            loaded_count += 1
         
         except Exception as e:
             errors.append(f"❌ Failed to load {yaml_file.name}: {e}")
     
     print("=" * 70)
-    print(f"✅ Loaded {loaded_count} external capabilities")
+    print(f"✅ Loaded {len(proposals)} external capability proposals")
     
     if errors:
         print(f"\n⚠️  {len(errors)} errors:")
         for error in errors:
             print(f"  {error}")
     
-    return loaded_count
+    return len(proposals)
+
+
+def load_external_capability_proposals(external_dir: Path) -> List[Dict[str, Any]]:
+    if not external_dir.exists():
+        return []
+
+    proposals: List[Dict[str, Any]] = []
+    for yaml_file in external_dir.glob("*.yaml"):
+        with open(yaml_file, "r") as f:
+            spec_dict = yaml.safe_load(f)
+        if not isinstance(spec_dict, dict):
+            continue
+
+        if "meta" in spec_dict:
+            capability_id = (spec_dict.get("meta") or {}).get("id")
+        else:
+            capability_id = spec_dict.get("id")
+        if not capability_id:
+            continue
+
+        adapter_config = spec_dict.get("adapter")
+        if not adapter_config:
+            continue
+
+        proposals.append(
+            {
+                "capability_id": capability_id,
+                "adapter": adapter_config,
+                "spec": spec_dict,
+                "source_file": str(yaml_file),
+            }
+        )
+
+    return proposals

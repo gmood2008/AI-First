@@ -1,0 +1,38 @@
+# SkillFacadeSpec v1.0 - Financial Analyst (flagship)
+name: financial-analyst
+version: 1.0.0
+description: >
+  Analyze financial reports and generate structured outputs:
+  financial_report workflow and financial-analyst pack.
+
+triggers:
+  - "分析财报"
+  - "生成金融报告"
+  - "financial report"
+  - "analyze financial report"
+
+examples:
+  - user: "分析财报"
+  - user: "生成金融报告"
+
+routes:
+  primary:
+    type: workflow
+    ref: financial_report
+  fallback:
+    type: pack
+    ref: financial-analyst
+
+constraints:
+  requires_pack_active: true
+  supported_environments:
+    - prod
+    - staging
+
+metadata:
+  category: financial
+  compatible_with:
+    - claude-skill
+    - copilot-skill
+  owner: ai-first
+  maturity: stable

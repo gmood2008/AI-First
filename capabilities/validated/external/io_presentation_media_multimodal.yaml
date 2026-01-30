@@ -1,0 +1,34 @@
+meta:
+  id: io.presentation.media.multimodal
+  version: 0.1.0
+  author: governance-proposal
+  description: >
+    Proposal-only external capability for multimedia embedding/transcoding.
+    This is not approved for stdlib registration due to dependency and security risks.
+  tags:
+    - proposal
+    - presentation
+    - media
+    - multimedia
+
+adapter:
+  type: http_api
+  config:
+    endpoint_url: http://127.0.0.1:8787/media/embed
+    method: POST
+    auth_type: none
+    timeout: 60.0
+
+proposal:
+  status: PROPOSED
+  rationale: >
+    Multimedia handling involves codecs/transcoding and potentially untrusted inputs.
+    It must be executed via an isolated sidecar with strict allowlists and size limits.
+  governance_requirements:
+    - Must validate media type and enforce size caps before processing
+    - Must forbid external URL fetching and remote downloads
+    - Must run in isolated sidecar with timeout, CPU/memory caps
+    - Must produce auditable artifacts with checksums
+  integration_rules:
+    - Not callable as a direct stdlib capability
+    - Only callable as a workflow step under an ACTIVE pack and ACTIVE facade

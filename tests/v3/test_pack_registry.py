@@ -28,6 +28,7 @@ class TestPackRegistry:
             registry = PackRegistry(db_path=db_path)
             
             pack_spec = CapabilityPackSpec(
+                pack_id="test-pack",
                 name="test-pack",
                 version="1.0.0",
                 description="Test pack",
@@ -49,6 +50,7 @@ class TestPackRegistry:
             registry = PackRegistry(db_path=db_path)
             
             pack_spec = CapabilityPackSpec(
+                pack_id="test-pack",
                 name="test-pack",
                 version="1.0.0",
                 description="Test pack",
@@ -70,6 +72,7 @@ class TestPackRegistry:
             # Register multiple versions
             for version in ["1.0.0", "1.1.0", "2.0.0"]:
                 pack_spec = CapabilityPackSpec(
+                    pack_id="test-pack",
                     name="test-pack",
                     version=version,
                     description=f"Version {version}",
@@ -90,6 +93,7 @@ class TestPackRegistry:
             registry = PackRegistry(db_path=db_path)
             
             pack_spec = CapabilityPackSpec(
+                pack_id="test-pack",
                 name="test-pack",
                 version="1.0.0",
                 description="Test pack",
@@ -127,6 +131,7 @@ class TestPackRegistry:
             registry = PackRegistry(db_path=db_path)
             
             pack_spec = CapabilityPackSpec(
+                pack_id="test-pack",
                 name="test-pack",
                 version="1.0.0",
                 description="Test pack",
@@ -154,6 +159,7 @@ class TestPackRegistry:
             # Register multiple packs
             for i, state_name in enumerate(["pack1", "pack2", "pack3"]):
                 pack_spec = CapabilityPackSpec(
+                    pack_id=state_name,
                     name=state_name,
                     version="1.0.0",
                     description=f"Pack {i}",
@@ -191,6 +197,7 @@ class TestPackRegistry:
             registry = PackRegistry(db_path=db_path)
             
             pack_spec = CapabilityPackSpec(
+                pack_id="test-pack",
                 name="test-pack",
                 version="1.0.0",
                 description="Test pack",
@@ -220,3 +227,35 @@ class TestPackRegistry:
                 reason="Test"
             )
             assert registry.is_pack_executable("test-pack", "1.0.0") is False
+
+    def test_validate_pack_rejects_empty_workflow_id(self):
+        """Test that pack with empty workflow ID in includes.workflows raises InvalidPackError"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            registry = PackRegistry(db_path=db_path, capability_registry=None)
+            pack_spec = CapabilityPackSpec(
+                pack_id="test-pack",
+                name="test-pack",
+                version="1.0.0",
+                description="Test pack",
+                includes=PackIncludes(capabilities=[], workflows=[""]),
+                risk_profile=PackRiskProfile(max_risk=RiskLevel.LOW),
+            )
+            with pytest.raises(InvalidPackError, match="empty workflow ID"):
+                registry.register_pack(pack_spec, registered_by="test_user")
+
+    def test_validate_pack_rejects_whitespace_only_workflow_id(self):
+        """Test that pack with whitespace-only workflow ID raises InvalidPackError"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            registry = PackRegistry(db_path=db_path, capability_registry=None)
+            pack_spec = CapabilityPackSpec(
+                pack_id="test-pack",
+                name="test-pack",
+                version="1.0.0",
+                description="Test pack",
+                includes=PackIncludes(capabilities=[], workflows=["  \t  "]),
+                risk_profile=PackRiskProfile(max_risk=RiskLevel.LOW),
+            )
+            with pytest.raises(InvalidPackError, match="empty workflow ID"):
+                registry.register_pack(pack_spec, registered_by="test_user")

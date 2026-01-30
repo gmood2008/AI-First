@@ -17,6 +17,7 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 import threading
 from queue import Queue
+from contextlib import closing
 
 
 class AuditLogger:
@@ -67,45 +68,44 @@ class AuditLogger:
     
     def _init_database(self):
         """Initialize database schema."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Enable WAL mode for better concurrency
-        cursor.execute("PRAGMA journal_mode=WAL")
-        
-        # Create audit_log table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS audit_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                session_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                capability_id TEXT NOT NULL,
-                action_type TEXT NOT NULL,
-                params_json TEXT,
-                result_json TEXT,
-                status TEXT NOT NULL,
-                side_effects TEXT,
-                requires_confirmation BOOLEAN DEFAULT 0,
-                was_confirmed BOOLEAN DEFAULT NULL,
-                undo_available BOOLEAN DEFAULT 0,
-                was_undone BOOLEAN DEFAULT 0,
-                undo_record_id INTEGER,
-                error_message TEXT,
-                duration_ms INTEGER,
-                FOREIGN KEY (undo_record_id) REFERENCES audit_log(id)
-            )
-        """)
-        
-        # Create indexes
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_id ON audit_log(session_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON audit_log(timestamp)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_capability_id ON audit_log(capability_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_status ON audit_log(status)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_id ON audit_log(user_id)")
-        
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
+
+            # Enable WAL mode for better concurrency
+            cursor.execute("PRAGMA journal_mode=WAL")
+
+            # Create audit_log table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    session_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    capability_id TEXT NOT NULL,
+                    action_type TEXT NOT NULL,
+                    params_json TEXT,
+                    result_json TEXT,
+                    status TEXT NOT NULL,
+                    side_effects TEXT,
+                    requires_confirmation BOOLEAN DEFAULT 0,
+                    was_confirmed BOOLEAN DEFAULT NULL,
+                    undo_available BOOLEAN DEFAULT 0,
+                    was_undone BOOLEAN DEFAULT 0,
+                    undo_record_id INTEGER,
+                    error_message TEXT,
+                    duration_ms INTEGER,
+                    FOREIGN KEY (undo_record_id) REFERENCES audit_log(id)
+                )
+            """)
+
+            # Create indexes
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_id ON audit_log(session_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON audit_log(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_capability_id ON audit_log(capability_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_status ON audit_log(status)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_id ON audit_log(user_id)")
+
+            conn.commit()
         
         # Set file permissions (readable only by user)
         os.chmod(self.db_path, 0o600)
@@ -216,28 +216,28 @@ class AuditLogger:
             original_record_id: ID of the original action
             undo_record_id: ID of the undo action
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            UPDATE audit_log
-            SET was_undone = 1, undo_record_id = ?
-            WHERE id = ?
-        """, (undo_record_id, original_record_id))
-        
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE audit_log
+                SET was_undone = 1, undo_record_id = ?
+                WHERE id = ?
+            """, (undo_record_id, original_record_id))
+            conn.commit()
     
     def _write_worker(self):
         """Background worker for async writes."""
-        while not self._shutdown:
+        while True:
             try:
                 record = self._write_queue.get(timeout=1)
                 if record is None:  # Shutdown signal
+                    self._write_queue.task_done()
                     break
-                
-                self._write_record(record)
-                self._write_queue.task_done()
+
+                try:
+                    self._write_record(record)
+                finally:
+                    self._write_queue.task_done()
             
             except Exception:
                 # Queue.get timeout or write error
@@ -245,37 +245,36 @@ class AuditLogger:
     
     def _write_record(self, record: Dict[str, Any]):
         """Write a single record to database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO audit_log (
-                timestamp, session_id, user_id, capability_id, action_type,
-                params_json, result_json, status, side_effects,
-                requires_confirmation, was_confirmed, undo_available, was_undone,
-                undo_record_id, error_message, duration_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            record['timestamp'],
-            record['session_id'],
-            record['user_id'],
-            record['capability_id'],
-            record['action_type'],
-            record['params_json'],
-            record['result_json'],
-            record['status'],
-            record['side_effects'],
-            record['requires_confirmation'],
-            record['was_confirmed'],
-            record['undo_available'],
-            record['was_undone'],
-            record['undo_record_id'],
-            record['error_message'],
-            record['duration_ms'],
-        ))
-        
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                INSERT INTO audit_log (
+                    timestamp, session_id, user_id, capability_id, action_type,
+                    params_json, result_json, status, side_effects,
+                    requires_confirmation, was_confirmed, undo_available, was_undone,
+                    undo_record_id, error_message, duration_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                record['timestamp'],
+                record['session_id'],
+                record['user_id'],
+                record['capability_id'],
+                record['action_type'],
+                record['params_json'],
+                record['result_json'],
+                record['status'],
+                record['side_effects'],
+                record['requires_confirmation'],
+                record['was_confirmed'],
+                record['undo_available'],
+                record['was_undone'],
+                record['undo_record_id'],
+                record['error_message'],
+                record['duration_ms'],
+            ))
+
+            conn.commit()
     
     def query(
         self,
@@ -298,38 +297,36 @@ class AuditLogger:
         Returns:
             List of audit records
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        query = "SELECT * FROM audit_log WHERE 1=1"
-        params = []
-        
-        if session_id:
-            query += " AND session_id = ?"
-            params.append(session_id)
-        
-        if user_id:
-            query += " AND user_id = ?"
-            params.append(user_id)
-        
-        if capability_id:
-            query += " AND capability_id = ?"
-            params.append(capability_id)
-        
-        if status:
-            query += " AND status = ?"
-            params.append(status)
-        
-        query += " ORDER BY timestamp DESC LIMIT ?"
-        params.append(limit)
-        
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        
-        conn.close()
-        
-        return [dict(row) for row in rows]
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            query = "SELECT * FROM audit_log WHERE 1=1"
+            params = []
+
+            if session_id:
+                query += " AND session_id = ?"
+                params.append(session_id)
+
+            if user_id:
+                query += " AND user_id = ?"
+                params.append(user_id)
+
+            if capability_id:
+                query += " AND capability_id = ?"
+                params.append(capability_id)
+
+            if status:
+                query += " AND status = ?"
+                params.append(status)
+
+            query += " ORDER BY timestamp DESC LIMIT ?"
+            params.append(limit)
+
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+            return [dict(row) for row in rows]
     
     def get_session_summary(self, session_id: str) -> Dict[str, Any]:
         """
@@ -341,24 +338,23 @@ class AuditLogger:
         Returns:
             Summary dictionary with counts and statistics
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT
-                COUNT(*) as total_actions,
-                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
-                SUM(CASE WHEN status = 'failure' THEN 1 ELSE 0 END) as failure_count,
-                SUM(CASE WHEN status = 'denied' THEN 1 ELSE 0 END) as denied_count,
-                SUM(CASE WHEN was_undone = 1 THEN 1 ELSE 0 END) as undone_count,
-                MIN(timestamp) as start_time,
-                MAX(timestamp) as end_time
-            FROM audit_log
-            WHERE session_id = ?
-        """, (session_id,))
-        
-        row = cursor.fetchone()
-        conn.close()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT
+                    COUNT(*) as total_actions,
+                    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
+                    SUM(CASE WHEN status = 'failure' THEN 1 ELSE 0 END) as failure_count,
+                    SUM(CASE WHEN status = 'denied' THEN 1 ELSE 0 END) as denied_count,
+                    SUM(CASE WHEN was_undone = 1 THEN 1 ELSE 0 END) as undone_count,
+                    MIN(timestamp) as start_time,
+                    MAX(timestamp) as end_time
+                FROM audit_log
+                WHERE session_id = ?
+            """, (session_id,))
+
+            row = cursor.fetchone()
         
         return {
             'total_actions': row[0],
@@ -372,6 +368,19 @@ class AuditLogger:
     
     def shutdown(self):
         """Gracefully shutdown the audit logger."""
+        try:
+            # Flush queued records first
+            self._write_queue.join()
+        except Exception:
+            pass
+
         self._shutdown = True
         self._write_queue.put(None)  # Signal shutdown
-        self._writer_thread.join(timeout=5)
+
+        try:
+            # Wait until the sentinel is consumed
+            self._write_queue.join()
+        except Exception:
+            pass
+
+        self._writer_thread.join()

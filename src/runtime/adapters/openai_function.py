@@ -7,6 +7,7 @@ Converts OpenAI Function Calling definitions into AI-First capabilities.
 import os
 from typing import Dict, Any
 from openai import OpenAI
+import httpx
 
 from .base import ExternalCapabilityAdapter
 from ..handler import ActionHandler
@@ -36,6 +37,9 @@ class OpenAIFunctionAdapter(ExternalCapabilityAdapter):
         
         self.client = OpenAI(api_key=self.api_key)
         self.function_definition = config.get("function_definition", {})
+        # Optional: HTTP endpoint to invoke the function (e.g. custom server)
+        self.endpoint_url = config.get("endpoint_url")
+        self.timeout = config.get("timeout", self.timeout or 30.0)
     
     def create_handler(self, spec_dict: Dict[str, Any]) -> ActionHandler:
         """Create a Handler that wraps OpenAI Function execution"""
@@ -95,13 +99,20 @@ class OpenAIFunctionAdapter(ExternalCapabilityAdapter):
     def _call_function(self, params: Dict[str, Any]) -> Any:
         """
         Call the OpenAI Function.
-        
-        Note: This is a placeholder. Actual implementation depends on
-        how the function is exposed (HTTP endpoint, gRPC, etc.)
+
+        If config provides endpoint_url, invokes via HTTP POST (JSON body).
+        Otherwise the caller must subclass and override, or use another adapter.
         """
-        # This would need to be implemented based on the actual
-        # function invocation mechanism
+        if self.endpoint_url:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(
+                    self.endpoint_url,
+                    json=params,
+                    headers={"Content-Type": "application/json"},
+                )
+                response.raise_for_status()
+                return response.json() if response.content else {}
         raise NotImplementedError(
-            "OpenAI Function calling mechanism needs to be specified. "
-            "This could be an HTTP endpoint, gRPC service, or other protocol."
+            "OpenAI Function calling requires 'endpoint_url' in config, or "
+            "subclass OpenAIFunctionAdapter and override _call_function()."
         )

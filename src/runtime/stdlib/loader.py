@@ -10,6 +10,7 @@ from typing import Dict, Any
 from ..registry import CapabilityRegistry
 from .fs_handlers import (
     ReadFileHandler,
+    HashFileHandler,
     WriteFileHandler,
     ListDirHandler,
     MakeDirHandler,
@@ -33,15 +34,35 @@ from .net_handlers import (
 from .data_handlers import (
     JSONParseHandler,
     JSONStringifyHandler,
+    JSONGetHandler,
     RegexMatchHandler,
     TemplateRenderHandler,
 )
+from .pdf_handlers import PdfExtractTableHandler
+from .pandas_handlers import PandasCalculateHandler
+from .fs_bytes_handlers import WriteBytesHandler
+
+try:
+    from .web_browser_handlers import WebBrowserNavigateHandler, WebBrowserSnapshotHandler
+except Exception:
+    WebBrowserNavigateHandler = None
+    WebBrowserSnapshotHandler = None
+
+try:
+    from .presentation_handlers import PPTXRenderHandler
+    from .presentation_theme_handlers import PresentationThemeApplyHandler
+    from .markdown_handlers import MarkdownToSlidesHandler
+except Exception:
+    PPTXRenderHandler = None
+    PresentationThemeApplyHandler = None
+    MarkdownToSlidesHandler = None
 
 
 # Mapping of capability IDs to handler classes
 STDLIB_HANDLERS = {
     # Filesystem (8)
     "io.fs.read_file": ReadFileHandler,
+    "io.fs.hash_file": HashFileHandler,
     "io.fs.write_file": WriteFileHandler,
     "io.fs.list_dir": ListDirHandler,
     "io.fs.make_dir": MakeDirHandler,
@@ -65,8 +86,26 @@ STDLIB_HANDLERS = {
     # Data (4)
     "data.json.parse": JSONParseHandler,
     "data.json.stringify": JSONStringifyHandler,
+    "data.json.get": JSONGetHandler,
     "text.regex.match": RegexMatchHandler,
     "text.template.render": TemplateRenderHandler,
+
+    # PDF (1) - financial report workflow
+    "io.pdf.extract_table": PdfExtractTableHandler,
+    # Math / Pandas (1) - financial report workflow
+    "math.pandas.calculate": PandasCalculateHandler,
+
+    **({
+        "web.browser.navigate": WebBrowserNavigateHandler,
+        "web.browser.snapshot": WebBrowserSnapshotHandler,
+    } if WebBrowserNavigateHandler is not None and WebBrowserSnapshotHandler is not None else {}),
+
+    **({
+        "io.presentation.pptx.render": PPTXRenderHandler,
+        "io.presentation.theme.apply": PresentationThemeApplyHandler,
+        "io.presentation.markdown.to_slides": MarkdownToSlidesHandler,
+    } if PPTXRenderHandler is not None and PresentationThemeApplyHandler is not None and MarkdownToSlidesHandler is not None else {}),
+    "io.fs.write_bytes": WriteBytesHandler,
 }
 
 

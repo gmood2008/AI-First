@@ -7,7 +7,7 @@ Provides webhook-based human approval for workflow steps:
 - Support approve/reject via CLI or API
 """
 import logging
-import requests
+import httpx
 from typing import Dict, Any, Optional
 from datetime import datetime
 import os
@@ -121,11 +121,11 @@ class HumanApprovalManager:
                     "approve": f"airun workflow resume {workflow_id} --decision approve",
                     "reject": f"airun workflow resume {workflow_id} --decision reject"}}
 
-            response = requests.post(
+            response = httpx.post(
                 self.webhook_url,
                 json=payload,
                 timeout=10,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
             )
 
             if response.status_code == 200:
@@ -135,7 +135,7 @@ class HumanApprovalManager:
                 logger.error(
                     f"Webhook returned status {response.status_code}: {response.text}")
 
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             logger.error(f"Failed to send webhook: {e}")
 
     def record_decision(

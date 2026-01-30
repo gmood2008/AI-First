@@ -6,6 +6,7 @@ This module implements the 8 core filesystem operations.
 
 import os
 import shutil
+import hashlib
 from pathlib import Path
 from typing import Any, Dict
 
@@ -59,11 +60,50 @@ class ReadFileHandler(ActionHandler):
         return full_path
 
 
+class HashFileHandler(ActionHandler):
+    """Handler for io.fs.hash_file"""
+
+    def execute(self, params: Dict[str, Any], context: Any) -> Dict[str, Any]:
+        path_str = params["path"]
+        full_path = self._resolve_path(path_str, context)
+
+        try:
+            data = full_path.read_bytes()
+            checksum = hashlib.sha256(data).hexdigest()
+            return {
+                "checksum_sha256": checksum,
+                "success": True,
+            }
+        except FileNotFoundError:
+            return {
+                "checksum_sha256": "",
+                "success": False,
+                "error_message": f"File not found: {path_str}",
+            }
+        except Exception as e:
+            return {
+                "checksum_sha256": "",
+                "success": False,
+                "error_message": str(e),
+            }
+
+    def _resolve_path(self, path_str: str, context: Any) -> Path:
+        workspace_root = context.workspace_root
+        full_path = (workspace_root / path_str).resolve()
+
+        if not str(full_path).startswith(str(workspace_root.resolve())):
+            raise SecurityError(f"Path '{path_str}' escapes workspace boundary")
+
+        return full_path
+
+
 class WriteFileHandler(ActionHandler):
     """Handler for io.fs.write_file"""
     
     def execute(self, params: Dict[str, Any], context: Any) -> ActionOutput:
-        path_str = params["path"]
+        path_str = params.get("path") or params.get("file_path")
+        if path_str is None:
+            raise ValueError("Missing required parameter: path or file_path")
         content = params["content"]
         encoding = params.get("encoding", "utf-8")
         create_dirs = params.get("create_dirs", False)

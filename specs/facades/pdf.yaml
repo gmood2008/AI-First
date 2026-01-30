@@ -1,0 +1,39 @@
+# SkillFacadeSpec v1.0 - PDF (Claude Skill equivalent)
+name: pdf
+version: 1.0.0
+description: >
+  Handle PDF documents: extract text and tables, merge or split PDFs,
+  and prepare structured data for downstream processing.
+
+triggers:
+  - "处理 PDF"
+  - "提取 PDF 表格"
+  - "解析财报 PDF"
+  - "extract tables from pdf"
+  - "analyze pdf document"
+
+examples:
+  - user: "帮我从这个 PDF 里提取财务表格"
+  - user: "分析一份 10-K PDF 报告"
+
+routes:
+  primary:
+    type: workflow
+    ref: financial_report
+  fallback:
+    type: pack
+    ref: document-processing-pack
+
+constraints:
+  requires_pack_active: true
+  supported_environments:
+    - prod
+    - staging
+
+metadata:
+  category: document-processing
+  compatible_with:
+    - claude-skill
+    - copilot-skill
+  owner: ai-first
+  maturity: stable

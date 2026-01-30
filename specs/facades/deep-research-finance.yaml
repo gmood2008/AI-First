@@ -1,0 +1,36 @@
+name: deep-research-finance
+version: 0.1.0
+description: >
+  Deep Research Suite for finance. Routes to a governed workflow that collects sources,
+  persists artifacts, computes deterministic metrics, and generates an auditable report.
+
+triggers:
+  - "深度研报"
+  - "生成深度研报"
+  - "deep research"
+  - "financial deep research"
+
+examples:
+  - user: "生成一份关于 AAPL 的深度研报"
+
+routes:
+  primary:
+    type: workflow
+    ref: deep_research_financial_report
+  fallback:
+    type: pack
+    ref: deep-research-finance
+
+constraints:
+  requires_pack_active: true
+  supported_environments:
+    - prod
+    - staging
+
+metadata:
+  category: financial
+  compatible_with:
+    - claude-skill
+    - copilot-skill
+  owner: ai-first
+  maturity: proposed

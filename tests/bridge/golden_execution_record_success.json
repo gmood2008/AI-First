@@ -1,0 +1,31 @@
+{
+  "id": "00000000000000000000000000000000",
+  "executionId": "exec_golden_success",
+  "traceId": "trace_golden_success",
+  "parentTraceId": null,
+  "capabilityId": "io.fs.list_dir",
+  "capabilityName": "io.fs.list_dir",
+  "input": {
+    "path": ".",
+    "recursive": false
+  },
+  "output": {
+    "entries": [
+      {
+        "name": "README.md",
+        "type": "file"
+      }
+    ],
+    "success": true
+  },
+  "status": "success",
+  "error": null,
+  "startTime": "2026-01-30T00:00:00Z",
+  "endTime": "2026-01-30T00:00:01Z",
+  "durationMs": 1000.0,
+  "userId": "user_golden",
+  "metadata": {
+    "source": "golden",
+    "mode": "local-bridge"
+  }
+}

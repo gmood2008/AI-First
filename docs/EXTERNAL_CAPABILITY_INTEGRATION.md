@@ -1,12 +1,24 @@
 # 第三方能力集成指南
 
+## 重要声明（v3 治理红线）
+
+从 v3 治理机制开始，第三方能力（External Adapter/外部工具）**不得**通过 Registry 直接注册为可执行能力。
+
+约束如下：
+
+- 外部能力加载 **只能生成 Proposal**（候选提案），不产生可执行 handler。
+- `CapabilityRegistry.register_external(...)` 作为执行入口 **被禁止**。
+- 任何可执行能力必须经由：`Capability → Workflow → Pack(ACTIVE) → Facade(ACTIVE) → CLI/MCP` 的治理链路执行。
+
+本文件中关于“适配器/外部能力”的内容可作为历史背景与数据格式参考，但**执行路径以治理链路为准**。
+
 ## 概述
 
 AI-First Runtime 现在支持将第三方能力（Claude Skills、OpenAI Functions、HTTP APIs 等）转换为 AI-First 能力，实现反向集成。
 
 ## 架构设计
 
-```
+```text
 第三方能力 (Claude Skill / OpenAI Function / HTTP API)
     ↓
 适配器 (Adapter)
@@ -25,6 +37,7 @@ AI-First Handler 包装器
 将 Claude Skill 转换为 AI-First 能力。
 
 **使用方式：**
+
 ```bash
 # 从 URL 导入
 ./forge import --from-claude-skill "https://api.anthropic.com/v1/skills/skill_123" \
@@ -37,6 +50,7 @@ AI-First Handler 包装器
 ```
 
 **生成的 YAML 示例：**
+
 ```yaml
 id: external.claude.data_analysis
 name: Data Analysis
@@ -61,12 +75,14 @@ adapter:
 将任何 HTTP API 转换为 AI-First 能力。
 
 **使用方式：**
+
 ```bash
 ./forge import --from-http-api api_definition.json \
   --id "external.slack.send_message"
 ```
 
 **API 定义文件格式：**
+
 ```json
 {
   "name": "Send Slack Message",
@@ -101,10 +117,12 @@ adapter:
 ### 适配器框架
 
 **基础类：** `src/runtime/adapters/base.py`
+
 - `ExternalCapabilityAdapter`: 所有适配器的基类
 - `AdapterConfig`: 适配器配置数据类
 
 **具体适配器：**
+
 - `ClaudeSkillAdapter`: `src/runtime/adapters/claude_skill.py`
 - `HTTPAPIAdapter`: `src/runtime/adapters/http_api.py`
 - `OpenAIFunctionAdapter`: `src/runtime/adapters/openai_function.py`
@@ -114,6 +132,7 @@ adapter:
 **位置：** `src/forge/auto/skill_converter.py`
 
 **功能：**
+
 - 将第三方能力定义转换为 AI-First 规范
 - 生成 Handler 包装器代码
 - 生成测试代码
@@ -123,6 +142,7 @@ adapter:
 **位置：** `src/runtime/external_loader.py`
 
 **功能：**
+
 - 自动扫描 `capabilities/validated/external/` 目录
 - 加载外部能力 YAML 文件
 - 使用适配器创建 Handler
@@ -157,6 +177,7 @@ registry.register_external(
 ```
 
 **生成的文件：**
+
 - `capabilities/validated/external/external.claude.my_skill.yaml` - 能力规范
 - `src/runtime/stdlib/generated/external_claude_my_skill.py` - Handler 包装器
 - `tests/generated/test_external_claude_my_skill.py` - 测试代码
@@ -164,6 +185,7 @@ registry.register_external(
 ### 2. 自动加载
 
 运行时启动时，MCP Server 会自动：
+
 1. 扫描 `capabilities/validated/external/` 目录
 2. 读取 YAML 文件中的适配器配置
 3. 创建适配器实例
@@ -280,12 +302,14 @@ EOF
 ### 1. 撤销支持
 
 大多数外部能力**不支持撤销操作**，因为：
+
 - 外部 API 通常不提供撤销接口
 - 操作可能已经产生外部影响
 
 ### 2. 错误处理
 
 适配器会捕获外部 API 错误并转换为 AI-First 格式：
+
 - HTTP 错误 → `RuntimeError`
 - 超时 → `TimeoutError`
 - 认证失败 → `AuthenticationError`
@@ -307,11 +331,13 @@ EOF
 ### 问题：导入失败
 
 **可能原因：**
+
 1. API Key 未设置
 2. 网络连接问题
 3. 定义文件格式错误
 
 **解决方案：**
+
 ```bash
 # 检查 API Key
 echo $CLAUDE_API_KEY
@@ -326,11 +352,13 @@ python3 -m json.tool skill.json
 ### 问题：运行时找不到外部能力
 
 **检查：**
+
 1. YAML 文件是否在 `capabilities/validated/external/` 目录
 2. YAML 文件是否包含 `adapter` 配置
 3. 适配器类型是否正确
 
 **验证：**
+
 ```python
 from runtime.external_loader import load_external_capabilities
 from runtime.registry import CapabilityRegistry

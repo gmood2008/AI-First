@@ -1,0 +1,37 @@
+pack_id: deep-research-finance-pack
+name: deep-research-finance
+version: 0.1.0
+
+description: >
+  Deep Research Suite for finance: collect market data and news, run deterministic analysis,
+  and generate an auditable markdown report (optional PDF export via governed sidecar).
+
+includes:
+  capabilities:
+    - net.http.get
+    - net.http.post
+    - io.fs.write_file
+    - io.fs.read_file
+    - io.fs.write_bytes
+    - math.pandas.calculate
+  workflows:
+    - deep_research_financial_report
+
+risk_profile:
+  max_risk: HIGH
+  requires_human_approval: true
+  auto_rollback_on_failure: true
+
+governance:
+  approval_roles:
+    - admin
+    - finance_director
+  audit_level: FORENSIC
+
+author: ai-first
+
+tags:
+  - finance
+  - research
+  - report
+  - compliance

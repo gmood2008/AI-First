@@ -127,8 +127,7 @@ def test_external_loader():
     print()
     
     try:
-        from runtime.external_loader import load_external_capabilities
-        from runtime.registry import CapabilityRegistry
+        from runtime.external_loader import load_external_capability_proposals
         from pathlib import Path
         
         # 创建测试目录和文件
@@ -155,17 +154,9 @@ adapter:
     auth_type: none
 """)
         
-        print("1️⃣ 测试加载外部能力...")
-        registry = CapabilityRegistry()
-        
-        # 注意：这里可能会失败，因为适配器需要真实的配置
-        # 但至少可以测试加载逻辑
-        try:
-            count = load_external_capabilities(registry, test_dir)
-            print(f"   ✅ 加载器函数可用")
-            print(f"   📦 尝试加载能力（可能因配置问题失败，这是正常的）")
-        except Exception as e:
-            print(f"   ⚠️  加载失败（预期，因为缺少真实配置）: {type(e).__name__}")
+        print("1️⃣ 测试加载外部能力 Proposal...")
+        proposals = load_external_capability_proposals(test_dir)
+        print(f"   ✅ proposals 数量: {len(proposals)}")
         
         # 清理测试文件
         test_yaml.unlink()

@@ -1,0 +1,23 @@
+pack_id: pack.web.research
+name: web-research-pack
+version: 1.0.0
+description: Governed web research pack backed by a browser sidecar
+responsibility: Provides safe web navigation/snapshot for research workflows
+
+includes:
+  capabilities:
+    - web.browser.navigate
+    - web.browser.snapshot
+  workflows:
+    - web_research
+
+risk_profile:
+  max_risk: MEDIUM
+  requires_human_approval: false
+  auto_rollback_on_failure: true
+
+governance:
+  approval_roles: []
+  audit_level: DETAILED
+
+author: ai-first

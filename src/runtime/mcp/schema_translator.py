@@ -296,19 +296,17 @@ def create_mcp_tools_from_stdlib(specs_dir: Path) -> List[Dict[str, Any]]:
     """
     Create MCP tool definitions for all standard library capabilities.
     
-    This is a convenience function for quickly generating MCP tools
-    from the AI-First standard library.
+    Uses the same capability ID list as load_stdlib (STDLIB_HANDLERS), so
+    io.pdf.extract_table and math.pandas.calculate are included when their
+    YAML specs exist in specs_dir.
     
     Args:
         specs_dir: Directory containing stdlib YAML specs
     
     Returns:
         List of MCP tool definitions
-    
-    Example:
-        >>> specs_dir = Path("../ai-first-specs/capabilities/validated/stdlib")
-        >>> tools = create_mcp_tools_from_stdlib(specs_dir)
-        >>> print(f"Created {len(tools)} MCP tools")
     """
+    from runtime.stdlib.loader import STDLIB_HANDLERS
+    capability_ids = sorted(STDLIB_HANDLERS.keys())
     translator = SchemaTranslator()
-    return translator.translate_multiple(specs_dir)
+    return translator.translate_multiple(specs_dir, capability_ids=capability_ids)

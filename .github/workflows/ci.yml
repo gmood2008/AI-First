@@ -26,6 +26,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .
         pip install pytest pytest-cov pylint
+
+    - name: Governance lint (must pass)
+      run: |
+        python scripts/governance_lint.py
+
+    - name: Markdown lint (must pass)
+      run: |
+        python scripts/markdown_lint.py
     
     - name: Lint with pylint
       run: |

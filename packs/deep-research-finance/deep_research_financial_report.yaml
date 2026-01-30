@@ -1,0 +1,389 @@
+workflow_id: deep_research_financial_report
+name: deep_research_financial_report
+version: 0.1.0
+
+description: >
+  Collect market data and relevant news, persist raw sources, compute deterministic metrics,
+  and generate an auditable markdown research report with optional PDF export.
+
+metadata:
+  owner: deep_research_finance
+  business_unit: Finance
+  environment: prod
+  pack_id: deep-research-finance-pack
+
+initial_state:
+  symbol: "AAPL"
+  yahoo_url: "http://127.0.0.1:8787/finance/yahoo?symbol=AAPL"
+  google_url: "http://127.0.0.1:8787/search/google?q=AAPL%20earnings"
+  run_id: ""
+  session_id: ""
+
+  artifacts_dir: ".ai-first/artifacts/deep-research-finance"
+  market_snapshot_path: ".ai-first/artifacts/deep-research-finance/market.json"
+  news_snapshot_path: ".ai-first/artifacts/deep-research-finance/news.json"
+  report_md_path: ".ai-first/artifacts/deep-research-finance/report.md"
+  report_pdf_path: ".ai-first/artifacts/deep-research-finance/report.pdf"
+  manifest_path: ".ai-first/artifacts/deep-research-finance/manifest.json"
+
+  analysis_data:
+    - year: 2022
+      revenue: 100.0
+      expenses: 70.0
+    - year: 2023
+      revenue: 120.0
+      expenses: 78.0
+
+steps:
+  - name: fetch_market
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: net.http.get
+    inputs:
+      url: "{{yahoo_url}}"
+      timeout: 30
+    risk_level: HIGH
+
+  - name: parse_market
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: data.json.parse
+    inputs:
+      json_string: "{{fetch_market.body}}"
+      strict: true
+    depends_on:
+      - fetch_market
+    risk_level: LOW
+
+  - name: pretty_market
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: data.json.stringify
+    inputs:
+      data: "{{parse_market.data}}"
+      pretty: true
+      indent: 2
+    depends_on:
+      - parse_market
+    risk_level: LOW
+
+  - name: get_market_price
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: data.json.get
+    inputs:
+      json_string: "{{fetch_market.body}}"
+      path: "price"
+    depends_on:
+      - fetch_market
+    risk_level: LOW
+
+  - name: get_market_pe
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: data.json.get
+    inputs:
+      json_string: "{{fetch_market.body}}"
+      path: "pe"
+    depends_on:
+      - fetch_market
+    risk_level: LOW
+
+  - name: get_market_currency
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: data.json.get
+    inputs:
+      json_string: "{{fetch_market.body}}"
+      path: "currency"
+    depends_on:
+      - fetch_market
+    risk_level: LOW
+
+  - name: get_time
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: sys.info.get_time
+    inputs:
+      format: iso8601
+      timezone: UTC
+    depends_on:
+      - approval_gate
+    risk_level: LOW
+
+  - name: persist_market
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: io.fs.write_file
+    inputs:
+      path: "{{market_snapshot_path}}"
+      content: "{{pretty_market.json_string}}"
+      create_dirs: true
+    depends_on:
+      - pretty_market
+    risk_level: HIGH
+
+  - name: hash_market_snapshot
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: io.fs.hash_file
+    inputs:
+      path: "{{market_snapshot_path}}"
+    depends_on:
+      - persist_market
+    risk_level: LOW
+
+  - name: fetch_news
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: net.http.get
+    inputs:
+      url: "{{google_url}}"
+      timeout: 30
+    depends_on:
+      - fetch_market
+    risk_level: HIGH
+
+  - name: parse_news
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: data.json.parse
+    inputs:
+      json_string: "{{fetch_news.body}}"
+      strict: true
+    depends_on:
+      - fetch_news
+    risk_level: LOW
+
+  - name: pretty_news
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: data.json.stringify
+    inputs:
+      data: "{{parse_news.data}}"
+      pretty: true
+      indent: 2
+    depends_on:
+      - parse_news
+    risk_level: LOW
+
+  - name: get_news_title
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: data.json.get
+    inputs:
+      json_string: "{{fetch_news.body}}"
+      path: "results.0.title"
+    depends_on:
+      - fetch_news
+    risk_level: LOW
+
+  - name: get_news_url
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: data.json.get
+    inputs:
+      json_string: "{{fetch_news.body}}"
+      path: "results.0.url"
+    depends_on:
+      - fetch_news
+    risk_level: LOW
+
+  - name: get_news_snippet
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: data.json.get
+    inputs:
+      json_string: "{{fetch_news.body}}"
+      path: "results.0.snippet"
+    depends_on:
+      - fetch_news
+    risk_level: LOW
+
+  - name: persist_news
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: io.fs.write_file
+    inputs:
+      path: "{{news_snapshot_path}}"
+      content: "{{pretty_news.json_string}}"
+      create_dirs: true
+    depends_on:
+      - pretty_news
+    risk_level: HIGH
+
+  - name: hash_news_snapshot
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: io.fs.hash_file
+    inputs:
+      path: "{{news_snapshot_path}}"
+    depends_on:
+      - persist_news
+    risk_level: LOW
+
+  - name: approval_gate
+    step_type: HUMAN_APPROVAL
+    agent_name: deep_research_finance
+    capability_name: human.approve
+    inputs:
+      message: "Approve generating the financial research report for {{symbol}}?"
+    depends_on:
+      - persist_market
+      - persist_news
+    risk_level: HIGH
+
+  - name: calculate_metrics
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: math.pandas.calculate
+    inputs:
+      data: "{{analysis_data}}"
+      operations:
+        - type: "sum"
+          column: "revenue"
+          output_column: "revenue_sum"
+        - type: "sum"
+          column: "expenses"
+          output_column: "expenses_sum"
+        - type: "calculate"
+          formula: "revenue - expenses"
+          output_column: "profit"
+    depends_on:
+      - get_time
+    risk_level: MEDIUM
+
+  - name: render_report_md
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: io.fs.write_file
+    inputs:
+      path: "{{report_md_path}}"
+      create_dirs: true
+      content: |
+        # Deep Research Report (Finance)
+
+        ## Subject
+        Symbol: {{symbol}}
+
+        ## Market Summary
+        - Price: {{get_market_price.value}} {{get_market_currency.value}}
+        - P/E: {{get_market_pe.value}}
+
+        ## News Summary (Top Result)
+        - Title: {{get_news_title.value}}
+        - URL: {{get_news_url.value}}
+        - Snippet: {{get_news_snippet.value}}
+
+        ## Market Data (raw)
+        ```json
+        {{pretty_market.json_string}}
+        ```
+
+        ## News Data (raw)
+        ```json
+        {{pretty_news.json_string}}
+        ```
+
+        ## Deterministic Metrics
+        ```json
+        {{calculated_metrics}}
+        ```
+
+        ## Audit Artifacts
+        - Market snapshot: {{market_snapshot_path}}
+        - News snapshot: {{news_snapshot_path}}
+        - Report markdown: {{report_md_path}}
+
+    depends_on:
+      - calculate_metrics
+    risk_level: HIGH
+
+  - name: hash_report_md
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: io.fs.hash_file
+    inputs:
+      path: "{{report_md_path}}"
+    depends_on:
+      - render_report_md
+    risk_level: LOW
+
+  - name: read_report_md
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: io.fs.read_file
+    inputs:
+      path: "{{report_md_path}}"
+      encoding: utf-8
+    depends_on:
+      - render_report_md
+    risk_level: LOW
+
+  - name: export_pdf
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: net.http.post
+    inputs:
+      url: "http://127.0.0.1:8787/io/pdf_export"
+      body: "{{read_report_md.content}}"
+      timeout: 60
+      headers:
+        Content-Type: text/markdown
+      content_type: text/markdown
+    depends_on:
+      - read_report_md
+    risk_level: HIGH
+
+  - name: persist_pdf
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: io.fs.write_bytes
+    inputs:
+      path: "{{report_pdf_path}}"
+      content_base64: "{{export_pdf.body}}"
+      create_dirs: true
+    depends_on:
+      - export_pdf
+    risk_level: HIGH
+
+  - name: render_manifest
+    step_type: ACTION
+    agent_name: deep_research_finance
+    capability_name: io.fs.write_file
+    inputs:
+      path: "{{manifest_path}}"
+      create_dirs: true
+      content: |
+        {
+          "generated_at": "{{get_time.timestamp}}",
+          "run_id": "{{run_id}}",
+          "session_id": "{{session_id}}",
+          "inputs": {
+            "symbol": "{{symbol}}",
+            "yahoo_url": "{{yahoo_url}}",
+            "google_url": "{{google_url}}"
+          },
+          "artifacts": {
+            "market_snapshot": "{{market_snapshot_path}}",
+            "market_snapshot_sha256": "{{hash_market_snapshot.checksum_sha256}}",
+            "news_snapshot": "{{news_snapshot_path}}",
+            "news_snapshot_sha256": "{{hash_news_snapshot.checksum_sha256}}",
+            "report_markdown": "{{report_md_path}}",
+            "report_markdown_sha256": "{{hash_report_md.checksum_sha256}}",
+            "report_pdf": {
+              "path": "{{report_pdf_path}}",
+              "bytes_written": "{{persist_pdf.bytes_written}}",
+              "checksum_sha256": "{{persist_pdf.checksum}}"
+            }
+          }
+        }
+    depends_on:
+      - persist_pdf
+      - hash_market_snapshot
+      - hash_news_snapshot
+      - hash_report_md
+    risk_level: HIGH
+
+max_execution_time_seconds: 3600
+enable_auto_rollback: true

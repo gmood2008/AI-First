@@ -9,6 +9,7 @@ from .base import ExternalCapabilityAdapter, AdapterConfig
 from .claude_skill import ClaudeSkillAdapter
 from .openai_function import OpenAIFunctionAdapter
 from .http_api import HTTPAPIAdapter
+from .runtime_wrapper import AdapterRuntimeWrapper, AdapterRuntimeConfig, AdapterRuntimeError
 
 __all__ = [
     "ExternalCapabilityAdapter",
@@ -16,6 +17,9 @@ __all__ = [
     "ClaudeSkillAdapter",
     "OpenAIFunctionAdapter",
     "HTTPAPIAdapter",
+    "AdapterRuntimeWrapper",
+    "AdapterRuntimeConfig",
+    "AdapterRuntimeError",
     "create_adapter",
 ]
 

@@ -1,0 +1,9 @@
+pack_id: pack.load.test
+version: 1.0.0
+name: load-test-pack
+description: Load testing pack (stdlib-only workflows)
+state: ACTIVE
+includes:
+  workflows:
+    - load_test_quick
+  capabilities: []

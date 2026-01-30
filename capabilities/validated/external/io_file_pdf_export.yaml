@@ -1,0 +1,33 @@
+meta:
+  id: io.file.pdf_export
+  version: 0.1.0
+  author: governance-proposal
+  description: >
+    Proposal-only external capability for rendering a markdown report into a PDF.
+    Must run as an isolated sidecar renderer.
+  tags:
+    - proposal
+    - io
+    - pdf
+    - export
+
+adapter:
+  type: http_api
+  config:
+    endpoint_url: http://127.0.0.1:8787/io/pdf_export
+    method: POST
+    auth_type: none
+    timeout: 60.0
+
+proposal:
+  status: PROPOSED
+  rationale: >
+    PDF rendering requires heavy dependencies and can be a security risk. Govern as a sidecar with strict caps.
+  governance_requirements:
+    - Sidecar must run in isolation with CPU/memory limits and a strict timeout
+    - Input markdown must be workspace-originated, with no external URL fetching
+    - Output must include byte_size and checksum_sha256
+    - Output must be persisted to workspace for audit replay
+  integration_rules:
+    - Not callable as a direct stdlib capability
+    - Only callable as a workflow step under an ACTIVE pack

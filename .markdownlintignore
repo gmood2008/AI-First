@@ -1,0 +1,14 @@
+node_modules/
+.venv/
+venv/
+workspace/
+**/.ai-first/
+**/.ai-first/**
+WEEK*_REPORT*.md
+WEEK*.md
+**/WEEK*_REPORT*.md
+**/WEEK*.md
+docs/week*.md
+docs/week*_*.md
+**/docs/week*.md
+**/docs/week*_*.md

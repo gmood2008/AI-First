@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 from enum import Enum
+from contextlib import closing
 
 from ..types import ExecutionContext
 
@@ -106,75 +107,77 @@ class WorkflowPersistence:
 
     def _init_schema(self):
         """Initialize workflow persistence schema."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
 
-        # Enable WAL mode for better concurrency
-        cursor.execute("PRAGMA journal_mode=WAL")
+            # Enable WAL mode for better concurrency
+            cursor.execute("PRAGMA journal_mode=WAL")
 
-        # Create workflows table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS workflows (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                owner TEXT NOT NULL,
-                status TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                started_at TEXT,
-                completed_at TEXT,
-                spec_yaml TEXT NOT NULL,
-                context_json TEXT,
-                error_message TEXT,
-                rollback_reason TEXT
+            # Create workflows table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS workflows (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    owner TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    spec_yaml TEXT NOT NULL,
+                    context_json TEXT,
+                    error_message TEXT,
+                    rollback_reason TEXT
+                )
+            """)
+
+            # Create workflow_steps table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS workflow_steps (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    workflow_id TEXT NOT NULL,
+                    step_id TEXT NOT NULL,
+                    step_name TEXT NOT NULL,
+                    capability_id TEXT NOT NULL,
+                    agent_name TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    inputs_json TEXT,
+                    outputs_json TEXT,
+                    error_message TEXT,
+                    execution_order INTEGER NOT NULL,
+                    FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+                )
+            """)
+
+            # Create compensation_log table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS compensation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    workflow_id TEXT NOT NULL,
+                    step_id TEXT NOT NULL,
+                    compensation_intent_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    executed_at TEXT,
+                    status TEXT NOT NULL,
+                    error_message TEXT,
+                    FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+                )
+            """)
+
+            # Create indexes
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workflows_status ON workflows(status)"
             )
-        """)
-
-        # Create workflow_steps table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS workflow_steps (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                workflow_id TEXT NOT NULL,
-                step_id TEXT NOT NULL,
-                step_name TEXT NOT NULL,
-                capability_id TEXT NOT NULL,
-                agent_name TEXT NOT NULL,
-                status TEXT NOT NULL,
-                started_at TEXT,
-                completed_at TEXT,
-                inputs_json TEXT,
-                outputs_json TEXT,
-                error_message TEXT,
-                execution_order INTEGER NOT NULL,
-                FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workflow_steps_workflow_id ON workflow_steps(workflow_id)"
             )
-        """)
-
-        # Create compensation_log table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS compensation_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                workflow_id TEXT NOT NULL,
-                step_id TEXT NOT NULL,
-                compensation_intent_json TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                executed_at TEXT,
-                status TEXT NOT NULL,
-                error_message TEXT,
-                FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compensation_log_workflow_id ON compensation_log(workflow_id)"
             )
-        """)
 
-        # Create indexes
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_workflows_status ON workflows(status)")
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_workflow_steps_workflow_id ON workflow_steps(workflow_id)")
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_compensation_log_workflow_id ON compensation_log(workflow_id)")
-
-        conn.commit()
-        conn.close()
+            conn.commit()
 
         # Set file permissions (readable only by user)
         os.chmod(self.db_path, 0o600)
@@ -197,31 +200,25 @@ class WorkflowPersistence:
             spec_yaml: Original workflow YAML specification
             context: Execution context (optional)
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
         now = datetime.utcnow().isoformat()
-        context_json = json.dumps(
-            self._serialize_context(context)) if context else None
 
-        cursor.execute("""
-            INSERT INTO workflows (
-                id, name, owner, status, created_at, updated_at,
-                spec_yaml, context_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            workflow_id,
-            name,
-            owner,
-            WorkflowStatus.PENDING.value,
-            now,
-            now,
-            spec_yaml,
-            context_json
-        ))
-
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO workflows (
+                    id, name, owner, status, created_at, updated_at, spec_yaml, context_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                workflow_id,
+                name,
+                owner,
+                WorkflowStatus.PENDING.value,
+                now,
+                now,
+                spec_yaml,
+                json.dumps(self._serialize_context(context)) if context else None
+            ))
+            conn.commit()
 
     def update_workflow_status(
         self,
@@ -239,19 +236,26 @@ class WorkflowPersistence:
             error_message: Error message (if failed)
             rollback_reason: Reason for rollback (if rolled back)
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
         now = datetime.utcnow().isoformat()
 
+        raw_status = getattr(status, "value", status)
+        status_text = str(raw_status)
+        if "." in status_text:
+            status_text = status_text.split(".")[-1]
+        status_text = status_text.lower()
+
         updates = {
-            "status": status.value,
+            "status": status_text,
             "updated_at": now
         }
 
-        if status == WorkflowStatus.RUNNING:
+        if status_text == WorkflowStatus.RUNNING.value:
             updates["started_at"] = now
-        elif status in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.ROLLED_BACK):
+        elif status_text in (
+            WorkflowStatus.COMPLETED.value,
+            WorkflowStatus.FAILED.value,
+            WorkflowStatus.ROLLED_BACK.value,
+        ):
             updates["completed_at"] = now
 
         if error_message:
@@ -262,14 +266,14 @@ class WorkflowPersistence:
         set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
         values = list(updates.values()) + [workflow_id]
 
-        cursor.execute(f"""
-            UPDATE workflows
-            SET {set_clause}
-            WHERE id = ?
-        """, values)
-
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"""
+                UPDATE workflows
+                SET {set_clause}
+                WHERE id = ?
+            """, values)
+            conn.commit()
 
     def checkpoint_step(
         self,
@@ -299,59 +303,90 @@ class WorkflowPersistence:
             outputs: Step outputs
             error_message: Error message (if failed)
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
         now = datetime.utcnow().isoformat()
 
-        # Check if step already exists
-        cursor.execute("""
-            SELECT id FROM workflow_steps
-            WHERE workflow_id = ? AND step_id = ?
-        """, (workflow_id, step_id))
+        status_text = str(status)
+        if "." in status_text:
+            status_text = status_text.split(".")[-1]
+        status_text = status_text.lower()
 
-        existing = cursor.fetchone()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
 
-        if existing:
-            # Update existing step
-            updates = {
-                "status": status,
-                "outputs_json": json.dumps(outputs) if outputs else None,
-                "error_message": error_message
-            }
-
-            if status == "completed":
-                updates["completed_at"] = now
-
-            set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
-            values = list(updates.values()) + [workflow_id, step_id]
-
-            cursor.execute(f"""
-                UPDATE workflow_steps
-                SET {set_clause}
-                WHERE workflow_id = ? AND step_id = ?
-            """, values)
-        else:
-            # Insert new step
+            # Check if step already exists
             cursor.execute("""
-                INSERT INTO workflow_steps (
-                    workflow_id, step_id, step_name, capability_id, agent_name,
-                    status, started_at, inputs_json, execution_order
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                workflow_id,
-                step_id,
-                step_name,
-                capability_id,
-                agent_name,
-                status,
-                now,
-                json.dumps(inputs) if inputs else None,
-                execution_order
-            ))
+                SELECT id FROM workflow_steps
+                WHERE workflow_id = ? AND step_id = ?
+            """, (workflow_id, step_id))
 
-        conn.commit()
-        conn.close()
+            existing = cursor.fetchone()
+
+            if existing:
+                # Update existing step
+                updates = {
+                    "status": status_text,
+                    "outputs_json": json.dumps(outputs) if outputs else None,
+                    "error_message": error_message
+                }
+
+                if status_text == "completed":
+                    updates["completed_at"] = now
+
+                set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+                values = list(updates.values()) + [workflow_id, step_id]
+
+                cursor.execute(f"""
+                    UPDATE workflow_steps
+                    SET {set_clause}
+                    WHERE workflow_id = ? AND step_id = ?
+                """, values)
+            else:
+                # Insert new step
+                cursor.execute("""
+                    INSERT INTO workflow_steps (
+                        workflow_id, step_id, step_name, capability_id, agent_name,
+                        status, started_at, inputs_json, execution_order
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    workflow_id,
+                    step_id,
+                    step_name,
+                    capability_id,
+                    agent_name,
+                    status_text,
+                    now,
+                    json.dumps(inputs) if inputs else None,
+                    execution_order
+                ))
+
+            conn.commit()
+
+    def update_workflow_step_statuses(
+        self,
+        workflow_id: str,
+        from_status: str,
+        to_status: str,
+    ) -> None:
+        now = datetime.utcnow().isoformat()
+
+        from_text = str(from_status).lower()
+        if "." in from_text:
+            from_text = from_text.split(".")[-1]
+        to_text = str(to_status).lower()
+        if "." in to_text:
+            to_text = to_text.split(".")[-1]
+
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE workflow_steps
+                SET status = ?, completed_at = ?
+                WHERE workflow_id = ? AND lower(status) = ?
+                """,
+                (to_text, now, workflow_id, from_text),
+            )
+            conn.commit()
 
     def log_compensation(
         self,
@@ -367,26 +402,23 @@ class WorkflowPersistence:
             step_id: Step that created this compensation
             intent: Compensation intent
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
         now = datetime.utcnow().isoformat()
 
-        cursor.execute("""
-            INSERT INTO compensation_log (
-                workflow_id, step_id, compensation_intent_json,
-                created_at, status
-            ) VALUES (?, ?, ?, ?, ?)
-        """, (
-            workflow_id,
-            step_id,
-            json.dumps(intent.to_dict()),
-            now,
-            "pending"
-        ))
-
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO compensation_log (
+                    workflow_id, step_id, compensation_intent_json,
+                    created_at, status
+                ) VALUES (?, ?, ?, ?, ?)
+            """, (
+                workflow_id,
+                step_id,
+                json.dumps(intent.to_dict()),
+                now,
+                "pending"
+            ))
+            conn.commit()
 
     def get_workflow(self, workflow_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -398,16 +430,15 @@ class WorkflowPersistence:
         Returns:
             Workflow record or None if not found
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT * FROM workflows WHERE id = ?
-        """, (workflow_id,))
+            cursor.execute("""
+                SELECT * FROM workflows WHERE id = ?
+            """, (workflow_id,))
 
-        row = cursor.fetchone()
-        conn.close()
+            row = cursor.fetchone()
 
         if row:
             return dict(row)
@@ -420,18 +451,17 @@ class WorkflowPersistence:
         Returns:
             List of workflow records
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT * FROM workflows
-            WHERE status IN (?, ?)
-            ORDER BY created_at ASC
-        """, (WorkflowStatus.RUNNING.value, WorkflowStatus.PAUSED.value))
+            cursor.execute("""
+                SELECT * FROM workflows
+                WHERE status IN (?, ?)
+                ORDER BY created_at ASC
+            """, (WorkflowStatus.RUNNING.value, WorkflowStatus.PAUSED.value))
 
-        rows = cursor.fetchall()
-        conn.close()
+            rows = cursor.fetchall()
 
         return [dict(row) for row in rows]
 
@@ -445,18 +475,17 @@ class WorkflowPersistence:
         Returns:
             List of step records
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT * FROM workflow_steps
-            WHERE workflow_id = ?
-            ORDER BY execution_order ASC
-        """, (workflow_id,))
+            cursor.execute("""
+                SELECT * FROM workflow_steps
+                WHERE workflow_id = ?
+                ORDER BY execution_order ASC
+            """, (workflow_id,))
 
-        rows = cursor.fetchall()
-        conn.close()
+            rows = cursor.fetchall()
 
         return [dict(row) for row in rows]
 
@@ -471,18 +500,17 @@ class WorkflowPersistence:
         Returns:
             List of compensation intents (most recent first)
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT * FROM compensation_log
-            WHERE workflow_id = ? AND status = 'pending'
-            ORDER BY id DESC
-        """, (workflow_id,))
+            cursor.execute("""
+                SELECT * FROM compensation_log
+                WHERE workflow_id = ? AND status = 'pending'
+                ORDER BY id DESC
+            """, (workflow_id,))
 
-        rows = cursor.fetchall()
-        conn.close()
+            rows = cursor.fetchall()
 
         return [
             CompensationIntent.from_dict(json.loads(row["compensation_intent_json"]))
@@ -503,30 +531,27 @@ class WorkflowPersistence:
             intent: Compensation intent that was executed
             error_message: Error message (if failed)
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
         now = datetime.utcnow().isoformat()
         status = "failed" if error_message else "executed"
 
-        cursor.execute("""
-            UPDATE compensation_log
-            SET executed_at = ?, status = ?, error_message = ?
-            WHERE workflow_id = ?
-              AND compensation_intent_json = ?
-              AND status = 'pending'
-            ORDER BY id DESC
-            LIMIT 1
-        """, (
-            now,
-            status,
-            error_message,
-            workflow_id,
-            json.dumps(intent.to_dict())
-        ))
-
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE compensation_log
+                SET executed_at = ?, status = ?, error_message = ?
+                WHERE workflow_id = ?
+                  AND compensation_intent_json = ?
+                  AND status = 'pending'
+                ORDER BY id DESC
+                LIMIT 1
+            """, (
+                now,
+                status,
+                error_message,
+                workflow_id,
+                json.dumps(intent.to_dict())
+            ))
+            conn.commit()
 
     def _serialize_context(
             self, context: Optional[ExecutionContext]) -> Dict[str, Any]:

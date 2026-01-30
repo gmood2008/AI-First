@@ -10,10 +10,32 @@
 
 This guide provides practical recipes for integrating AI-First Runtime into your existing development workflow. The goal is to make the runtime a seamless extension of your favorite tools, not a replacement.
 
+For internal partner teams, this guide is also the single entrypoint for delivery and upgrade modes. The authoritative compatibility rules are defined in:
+
+- `docs/COMPATIBILITY_CONTRACT.md`
+
 We will cover three primary integration patterns:
-1.  **Claude Desktop:** For conversational, task-oriented agentic workflows.
-2.  **Cursor / VS Code:** For in-editor, code-aware agentic development.
-3.  **Python Scripts:** For programmatic, automated agentic processes.
+
+1. **Claude Desktop:** For conversational, task-oriented agentic workflows.
+2. **Cursor / VS Code:** For in-editor, code-aware agentic development.
+3. **Python Scripts:** For programmatic, automated agentic processes.
+
+### 1.1 Delivery / integration modes (internal)
+
+- **Internal PyPI (wheel)**
+  - Install runtime via `pip install ai-first-runtime`
+  - Assets default to wheel embedded `share/ai-first-runtime/...`
+  - See: `docs/INTERNAL_PYPI_DISTRIBUTION_SOP.md`
+- **Offline bundle-first (tar.gz)**
+  - Install wheel from `wheels/*.whl` inside the bundle
+  - Optional plaintext assets included for deep integration scenarios
+- **Plaintext assets mode (deep integration)**
+  - Keep runtime code via wheel
+  - Override assets via `AI_FIRST_ASSETS_DIR=<assets_root>`
+  - See: `docs/PLAINTEXT_ASSETS_MODE_GUIDE.md`
+- **Local bridge (subprocess, Aegis P0)**
+  - Aegis spawns `airun bridge exec-capability` and consumes strict JSON
+  - Golden samples: `tests/bridge/*.json`
 
 ---
 
@@ -64,10 +86,10 @@ Claude Desktop can connect to external tools by defining them in an `agent_confi
 
 ### 3.2. How It Works
 
-1.  When you start a new conversation in Claude Desktop, it reads this config file.
-2.  It launches the `airun` server as a subprocess.
-3.  Claude's agent can now see and call all capabilities exposed by the runtime (e.g., `io.fs.write_file`, `sys.undo`).
-4.  All actions are logged to `~/.ai-first/audit.db`.
+1. When you start a new conversation in Claude Desktop, it reads this config file.
+2. It launches the `airun` server as a subprocess.
+3. Claude's agent can now see and call all capabilities exposed by the runtime (e.g., `io.fs.write_file`, `sys.undo`).
+4. All actions are logged to `~/.ai-first/audit.db`.
 
 ### 3.3. Example Prompt
 
@@ -111,11 +133,11 @@ Cursor (and VS Code with the right extensions) allows defining custom AI tasks. 
 
 ### 4.2. How It Works
 
-1.  You select a block of code in Cursor.
-2.  You invoke the "Safe Refactor" task with a prompt (e.g., "add type hints to this function").
-3.  Cursor's AI generates a Python script that calls `airun.io.fs.write_file` to modify the source file.
-4.  This script is executed, and the change is applied.
-5.  If you don't like the change, you can simply run `airun.sys.undo` from your terminal to revert it.
+1. You select a block of code in Cursor.
+2. You invoke the "Safe Refactor" task with a prompt (e.g., "add type hints to this function").
+3. Cursor's AI generates a Python script that calls `airun.io.fs.write_file` to modify the source file.
+4. This script is executed, and the change is applied.
+5. If you don't like the change, you can simply run `airun.sys.undo` from your terminal to revert it.
 
 ### 4.3. Key Advantage
 
@@ -207,11 +229,11 @@ if __name__ == "__main__":
 
 ### 5.2. How It Works
 
-1.  **Initialization:** You create instances of the `RuntimeEngine`, `UndoManager`, and `AuditLogger`.
-2.  **Context:** You define an `ExecutionContext` for the entire run.
-3.  **Execution:** You call `engine.execute()` for each step in your workflow.
-4.  **Control Flow:** You can use standard Python `if/else` logic to handle results, errors, and retries.
-5.  **Shutdown:** You call `audit_logger.shutdown()` to ensure all logs are written.
+1. **Initialization:** You create instances of the `RuntimeEngine`, `UndoManager`, and `AuditLogger`.
+2. **Context:** You define an `ExecutionContext` for the entire run.
+3. **Execution:** You call `engine.execute()` for each step in your workflow.
+4. **Control Flow:** You can use standard Python `if/else` logic to handle results, errors, and retries.
+5. **Shutdown:** You call `audit_logger.shutdown()` to ensure all logs are written.
 
 ---
 
