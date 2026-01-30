@@ -5,8 +5,8 @@ from typing import Optional
 
 import yaml
 
-from src.registry.pack_registry import PackRegistry
-from src.specs.capability_pack import CapabilityPackSpec, PackState
+from registry.pack_registry import PackRegistry
+from specs.capability_pack import CapabilityPackSpec, PackState
 
 
 def load_packs_from_directory(

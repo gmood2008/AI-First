@@ -42,12 +42,12 @@ from runtime.pack_loader import load_packs_from_directory
 from runtime.audit import AuditLogger
 from runtime.paths import facades_dir as resolve_facades_dir, packs_dir as resolve_packs_dir, external_specs_dir as resolve_external_dir
 
-from src.registry.pack_registry import PackRegistry
-from src.runtime.workflow.engine import WorkflowEngine
-from src.runtime.workflow.engine import GovernanceDecision
-from src.runtime.workflow.persistence import WorkflowPersistence
-from src.runtime.workflow.spec_loader import load_workflow_spec_by_id
-from src.runtime.workflow.governance_http import GovernanceHttpConfig, build_http_governance_hooks
+from registry.pack_registry import PackRegistry
+from runtime.workflow.engine import WorkflowEngine
+from runtime.workflow.engine import GovernanceDecision
+from runtime.workflow.persistence import WorkflowPersistence
+from runtime.workflow.spec_loader import load_workflow_spec_by_id
+from runtime.workflow.governance_http import GovernanceHttpConfig, build_http_governance_hooks
 from specs.v3.workflow_schema import WorkflowSpec
 from runtime.mcp.specs_resolver import resolve_specs_dir
 
@@ -169,16 +169,15 @@ def _map_exit_code(category: str) -> int:
     mapping = {
         "VALIDATION_ERROR": 10,
         "PERMISSION_DENIED": 11,
-        "RESOURCE_NOT_FOUND": 12,
-        "TIMEOUT": 13,
-        "NETWORK_ERROR": 14,
-        "EXTERNAL_SERVICE_ERROR": 15,
-        "CONSTITUTION_VIOLATION": 16,
+        "SECURITY_VIOLATION": 12,
+        "CAPABILITY_NOT_FOUND": 13,
+        "CONFIRMATION_DENIED": 14,
+        "TIMEOUT": 15,
+        "CANCELLED": 16,
         "PAUSED": 30,
         "INTERNAL_ERROR": 20,
-        "UNKNOWN_ERROR": 21,
     }
-    return mapping.get(category, 21)
+    return mapping.get(category, 20)
 
 
 def _load_workflow_spec_from_path(path: Path) -> WorkflowSpec:
@@ -331,12 +330,19 @@ def _build_workflow_record(
             "retryable": False,
         }
         exit_code = _map_exit_code(failure_category)
+    elif bridge_status == "rolled_back":
+        # Rollback is an explicit terminal control action; treat as a successful completion of rollback.
+        exit_code = 0
     else:
         msg = wf_row.get("error_message") or "Workflow failed"
-        failure_category = _map_failure_category(RuntimeError(str(msg)))
+        msg_text = str(msg)
+        if msg_text.strip().lower().startswith("cancelled"):
+            failure_category = "CANCELLED"
+        else:
+            failure_category = _map_failure_category(RuntimeError(msg_text))
         error_obj = {
             "category": failure_category,
-            "message": str(msg),
+            "message": msg_text,
             "recoverable": False,
             "retryable": False,
         }
@@ -536,7 +542,7 @@ def _build_facade_runtime(workspace: Path, *, quiet: bool = False):
 
 
 def _find_pack_for_workflow(pack_registry: PackRegistry, workflow_id: str):
-    from src.specs.capability_pack import PackState
+    from specs.capability_pack import PackState
 
     for p in pack_registry.list_packs(state=PackState.ACTIVE):
         if workflow_id in (p.includes.workflows or []):
@@ -561,7 +567,7 @@ def _print_route_status(
     elif route_type == "pack":
         pack = pack_registry.get_pack(ref)
         if pack is None:
-            from src.specs.capability_pack import PackState
+            from specs.capability_pack import PackState
 
             for p in pack_registry.list_packs(state=PackState.ACTIVE, pack_name=ref):
                 pack = p
@@ -1570,7 +1576,7 @@ def governance_pack_activate(
     rec = reg.get_pack_record(pack_ref=pack_ref, version=version)
     if rec is None:
         _fail(f"Pack not found: {pack_ref}", code=4)
-    from src.specs.capability_pack import PackState
+    from specs.capability_pack import PackState
     reg.transition_state(
         pack_id=rec["pack_id"],
         version=rec["pack_version"],
@@ -1599,7 +1605,7 @@ def governance_pack_freeze(
     rec = reg.get_pack_record(pack_ref=pack_ref, version=version)
     if rec is None:
         _fail(f"Pack not found: {pack_ref}", code=4)
-    from src.specs.capability_pack import PackState
+    from specs.capability_pack import PackState
 
     reg.transition_state(
         pack_id=rec["pack_id"],
@@ -1629,7 +1635,7 @@ def governance_pack_deprecate(
     rec = reg.get_pack_record(pack_ref=pack_ref, version=version)
     if rec is None:
         _fail(f"Pack not found: {pack_ref}", code=4)
-    from src.specs.capability_pack import PackState
+    from specs.capability_pack import PackState
 
     reg.transition_state(
         pack_id=rec["pack_id"],
@@ -1787,7 +1793,7 @@ def facade_run(
         elif target.type.value == "pack":
             pack = pack_registry.get_pack(target.ref)
             if pack is None:
-                from src.specs.capability_pack import PackState
+                from specs.capability_pack import PackState
 
                 for p in pack_registry.list_packs(state=PackState.ACTIVE, pack_name=target.ref):
                     pack = p
@@ -2138,9 +2144,9 @@ def workflow_resume(workflow_id: str, decision: str, approver: str):
     """
     try:
         # Import workflow engine
-        from src.runtime.workflow.engine import WorkflowEngine
-        from src.runtime.workflow.persistence import WorkflowPersistence
-        from src.runtime.workflow.human_approval import HumanApprovalManager
+        from runtime.workflow.engine import WorkflowEngine
+        from runtime.workflow.persistence import WorkflowPersistence
+        from runtime.workflow.human_approval import HumanApprovalManager
         
         # Initialize engine
         persistence = WorkflowPersistence()

@@ -20,7 +20,7 @@ from ..lifecycle.state_machine import CapabilityState
 
 # Pack Registry integration (optional)
 try:
-    from src.registry.pack_registry import PackRegistry, PackState
+    from registry.pack_registry import PackRegistry, PackState
     PACK_REGISTRY_AVAILABLE = True
 except ImportError:
     PACK_REGISTRY_AVAILABLE = False
@@ -345,19 +345,20 @@ class ProposalLifecycleAPI:
                 if not pack_spec_dict:
                     raise ValueError(f"PACK_CREATE proposal {proposal.proposal_id} missing pack_spec in metadata")
                 
-                from src.specs.capability_pack import CapabilityPackSpec
+                from specs.capability_pack import CapabilityPackSpec
                 pack_spec = CapabilityPackSpec.model_validate(pack_spec_dict)
                 
                 # 注册 Pack（如果尚未注册）
                 try:
-                    existing_pack = self.pack_registry.get_pack(pack_spec.name, pack_spec.version)
-                    if not existing_pack:
-                        self.pack_registry.register_pack(
-                            pack_spec=pack_spec,
-                            registered_by=proposal.created_by,
-                            proposal_id=proposal.proposal_id
-                        )
-                except Exception as e:
+                    if self.pack_registry:
+                        existing_pack = self.pack_registry.get_pack(pack_spec.name, pack_spec.version)
+                        if not existing_pack:
+                            self.pack_registry.register_pack(
+                                pack_spec=pack_spec,
+                                registered_by=proposal.created_by,
+                                proposal_id=proposal.proposal_id
+                            )
+                except Exception:
                     # Pack 可能已存在，继续尝试激活
                     pass
                 

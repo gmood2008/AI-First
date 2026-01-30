@@ -21,9 +21,9 @@ from typing import Optional
 import os
 import sqlite3
 
-from src.specs.v3.workflow_schema import WorkflowStatus
-from src.runtime.workflow.persistence import WorkflowPersistence
-from src.runtime.workflow.recovery import WorkflowRecovery
+from specs.v3.workflow_schema import WorkflowStatus
+from runtime.workflow.persistence import WorkflowPersistence
+from runtime.workflow.recovery import WorkflowRecovery
 
 
 def _audit_db_path() -> str:

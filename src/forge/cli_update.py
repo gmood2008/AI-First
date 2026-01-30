@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from forge.auto.pipeline import AutoForge
-from src.specs.v3.capability_schema import CapabilitySpec
+from specs.v3.capability_schema import CapabilitySpec
 import yaml
 
 

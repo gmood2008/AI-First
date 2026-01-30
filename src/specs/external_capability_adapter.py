@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from src.specs.v3.capability_schema import RiskLevel
+from specs.v3.capability_schema import RiskLevel
 
 
 class ExternalToolType(str, Enum):

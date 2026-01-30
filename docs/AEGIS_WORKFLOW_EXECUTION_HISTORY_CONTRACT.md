@@ -79,6 +79,20 @@
 - `paused`
 - `rolled_back`
 
+### 2.3 退出码（Exit Code）约定（建议）
+
+Aegis 通过 subprocess 方式调用 bridge 命令时，建议同时使用：
+
+- stdout：严格单条 JSON（见 2.1）
+- exit code：用于快速分流/路由处理
+
+当前约定：
+
+- `0`：成功（`status=success`）
+- `30`：暂停（`status=paused`，等待人工审批或外部信号）
+- `16`：取消（`status=failure` 且 `error.category=CANCELLED`）
+- `0`：已回滚（`status=rolled_back`，`error=null`）
+
 ---
 
 ## 3. Step 明细（steps[]）
@@ -120,6 +134,7 @@
 - 人工确认拒绝：`CONFIRMATION_DENIED`
 - 找不到能力/资源：`NOT_FOUND`
 - 超时：`TIMEOUT`
+- 主动取消：`CANCELLED`
 - 运行时内部异常：`INTERNAL_ERROR`
 
 治理相关：
@@ -149,6 +164,21 @@
 
 若校验失败，将输出 `VALIDATION_ERROR` 并以非 0 退出码退出。
 
+注意：schema 校验依赖 `jsonschema`（Python 包）。若运行环境缺少该依赖，将返回 `VALIDATION_ERROR`。
+
+---
+
+## 7. Workflow 控制命令（resume/cancel/rollback）与 workspace 约束
+
+`exec-workflow` 会把 workflow 执行状态持久化到 `--workspace/.ai-first/audit.db`。
+因此：
+
+- `airun bridge workflow-resume`
+- `airun bridge workflow-cancel`
+- `airun bridge workflow-rollback`
+
+必须使用与 `exec-workflow` **相同的** `--workspace` 参数，否则会因为找不到持久化记录而失败。
+
 ---
 
 ## 6. Aegis 需要明确的 ingest 要求
@@ -162,7 +192,7 @@
 
 ---
 
-## 7. 版本与兼容性
+## 8. 版本与兼容性
 
 - 本协议建议纳入 `docs/COMPATIBILITY_CONTRACT.md` 的“对外契约”范围
 - 字段新增保持向后兼容，不做破坏性重命名

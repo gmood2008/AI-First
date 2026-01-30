@@ -40,9 +40,9 @@ from runtime.stdlib.loader import load_stdlib
 from runtime.facade_loader import load_facades_from_directory
 from runtime.facade_router import resolve_and_validate
 from runtime.pack_loader import load_packs_from_directory
-from src.registry.pack_registry import PackRegistry
-from src.runtime.workflow.engine import WorkflowEngine
-from src.runtime.workflow.spec_loader import load_workflow_spec_by_id
+from registry.pack_registry import PackRegistry
+from runtime.workflow.engine import WorkflowEngine
+from runtime.workflow.spec_loader import load_workflow_spec_by_id
 from runtime.undo.manager import UndoManager
 from runtime.audit import AuditLogger
 from runtime.security.sandbox import PathSandbox

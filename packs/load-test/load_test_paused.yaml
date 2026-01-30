@@ -1,0 +1,51 @@
+workflow_id: load_test_paused
+name: load_test_paused
+version: 1.0.0
+description: Minimal deterministic workflow that pauses on a HUMAN_APPROVAL step (stdlib-only)
+
+metadata:
+  owner: load_test
+  pack_id: pack.load.test
+  pack_name: load-test-pack
+  pack_version: 1.0.0
+
+initial_state:
+  run_id: ""
+
+steps:
+  - name: write_file_before_pause
+    step_type: ACTION
+    agent_name: load_test
+    capability_name: io.fs.write_file
+    inputs:
+      path: "before_pause.txt"
+      content: "run_id={{run_id}}\n"
+      create_dirs: false
+    timeout_seconds: 10
+
+  - name: approval_gate
+    step_type: HUMAN_APPROVAL
+    agent_name: load_test
+    capability_name: human.approve
+    depends_on:
+      - write_file_before_pause
+    inputs:
+      message: "Approve to continue load test workflow"
+    timeout_seconds: 10
+
+  - name: write_file_after_pause
+    step_type: ACTION
+    agent_name: load_test
+    capability_name: io.fs.write_file
+    depends_on:
+      - approval_gate
+    inputs:
+      path: "after_pause.txt"
+      content: "approved=true\n"
+      create_dirs: false
+    timeout_seconds: 10
+
+policy: []
+global_compensation_steps: []
+max_execution_time_seconds: 60
+enable_auto_rollback: true
